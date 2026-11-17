@@ -24,7 +24,7 @@ Cada chamado registrado passa automaticamente por uma camada de **triagem inteli
 | **Thiago Rodrigues da Mota** | `563650` | 2TDSPF | Cloud DevOps, QA & Database Persistence |
 
 - **Versão da Aplicação:** `1.0.0`
-- **Commit Hash de Referência Oficial:** `6eeed36`
+- **Commit Hash de Referência Oficial:** `9c13b49`
 
 ---
 

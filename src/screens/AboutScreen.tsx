@@ -13,7 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { colors, radius, shadows, spacing, typography } from '../styles/theme';
 
 export const APP_VERSION = 'Versão 1.0.0';
-export const COMMIT_HASH_REF = '6eeed36';
+export const COMMIT_HASH_REF = '9c13b49';
 
 interface TeamMember {
   nome: string;
