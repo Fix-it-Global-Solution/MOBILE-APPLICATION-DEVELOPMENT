@@ -15,7 +15,7 @@ O **Fix-It** permite que cidadãos reportem incidentes urbanos (buracos na via, 
 | **Richard Freitas** | `566127` | 2TDSPF | Spring AI (Gemini) & Mensageria RabbitMQ |
 | **Thiago Rodrigues da Mota** | `563650` | 2TDSPF | Cloud DevOps, QA & Database Persistence |
 
-- **Commit de Referência Inicial:** `cb5f0a1`
+- **Commit de Referência Oficial:** `6eeed36`
 
 ---
 
