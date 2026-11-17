@@ -14,10 +14,14 @@ interface OcorrenciaContextData {
   ocorrencias: Ocorrencia[];
   minhasOcorrencias: Ocorrencia[];
   loading: boolean;
+  error: string | null;
   refreshOcorrencias: () => Promise<void>;
+  listarOcorrencias: () => Promise<Ocorrencia[]>;
+  listarMinhasOcorrencias: (usuarioId?: number) => Promise<Ocorrencia[]>;
   criarOcorrencia: (
     dados: Omit<OcorrenciaRequestDTO, 'usuarioId'>
   ) => Promise<Ocorrencia>;
+  cancelarOcorrencia: (id: number) => Promise<void>;
   excluirOcorrencia: (id: number) => Promise<void>;
 }
 
@@ -31,27 +35,52 @@ export const OcorrenciaProvider: React.FC<{ children: React.ReactNode }> = ({
   const { user } = useAuth();
   const [ocorrencias, setOcorrencias] = useState<Ocorrencia[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const refreshOcorrencias = useCallback(async () => {
+  const listarOcorrencias = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const lista = await ocorrenciaService.listarTodas();
+      const lista = await ocorrenciaService.listarOcorrencias();
       setOcorrencias(lista);
+      return lista;
+    } catch (err: any) {
+      const message =
+        err?.message ||
+        'Não foi possível carregar as ocorrências no momento.';
+      setError(message);
+      throw err;
     } finally {
       setLoading(false);
     }
   }, []);
 
+  const refreshOcorrencias = useCallback(async () => {
+    await listarOcorrencias();
+  }, [listarOcorrencias]);
+
+  const listarMinhasOcorrencias = useCallback(
+    async (usuarioId?: number) => {
+      const targetId = usuarioId ?? user?.id ?? 1;
+      const lista = await ocorrenciaService.listarMinhasOcorrencias(
+        targetId,
+        user?.nome
+      );
+      return lista;
+    },
+    [user]
+  );
+
   useEffect(() => {
-    refreshOcorrencias();
-  }, [refreshOcorrencias]);
+    listarOcorrencias().catch(() => {});
+  }, [listarOcorrencias]);
 
   const criarOcorrencia = useCallback(
     async (dados: Omit<OcorrenciaRequestDTO, 'usuarioId'>) => {
       const usuarioId = user?.id ?? 1;
       const autorNome = user?.nome ?? 'Munícipe Fix-It';
 
-      const nova = await ocorrenciaService.criar(
+      const nova = await ocorrenciaService.criarOcorrencia(
         {
           ...dados,
           usuarioId,
@@ -65,10 +94,17 @@ export const OcorrenciaProvider: React.FC<{ children: React.ReactNode }> = ({
     [user]
   );
 
-  const excluirOcorrencia = useCallback(async (id: number) => {
-    await ocorrenciaService.excluir(id);
+  const cancelarOcorrencia = useCallback(async (id: number) => {
+    await ocorrenciaService.cancelarOcorrencia(id);
     setOcorrencias((prev) => prev.filter((item) => item.id !== id));
   }, []);
+
+  const excluirOcorrencia = useCallback(
+    async (id: number) => {
+      await cancelarOcorrencia(id);
+    },
+    [cancelarOcorrencia]
+  );
 
   const minhasOcorrencias = useMemo(() => {
     if (!user) return [];
@@ -86,8 +122,12 @@ export const OcorrenciaProvider: React.FC<{ children: React.ReactNode }> = ({
         ocorrencias,
         minhasOcorrencias,
         loading,
+        error,
         refreshOcorrencias,
+        listarOcorrencias,
+        listarMinhasOcorrencias,
         criarOcorrencia,
+        cancelarOcorrencia,
         excluirOcorrencia,
       }}
     >

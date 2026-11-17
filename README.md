@@ -87,6 +87,6 @@ npx expo start
 ```
 
 - Pressione `a` para abrir no **Android Emulator**, `i` para **iOS Simulator**, `w` para **Web**, ou escaneie o QR Code com o aplicativo **Expo Go** no seu smartphone.
-- **Credenciais de Demonstração Rápida (1 clique na tela de Login):**
-  - **Cidadão:** `cidadao@fixit.com.br` | Senha: `Password@123`
-  - **Gestor:** `gestor@fixit.com.br` | Senha: `Password@123`
+- **Credenciais de Demonstração Rápida (DataSeeder Oficial — 1 clique na tela de Login):**
+  - **Cidadão (`ROLE_CIDADAO`):** `cidadao@fixit.com` | Senha: `123456`
+  - **Gestor (`ROLE_GESTOR`):** `gestor@fixit.com` | Senha: `123456`

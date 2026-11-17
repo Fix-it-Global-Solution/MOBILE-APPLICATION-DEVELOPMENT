@@ -1,5 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -9,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import MapView, { Callout, Marker } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { FixItLogo } from '../components/FixItLogo';
 import { OcorrenciaCard } from '../components/OcorrenciaCard';
@@ -20,17 +23,91 @@ import {
   STATUS_META,
 } from '../services/mockData';
 import { colors, radius, spacing, typography } from '../styles/theme';
-import { CriticidadeNivel, MainTabParamList, Ocorrencia } from '../types';
+import {
+  CriticidadeNivel,
+  MainTabParamList,
+  Ocorrencia,
+  StatusOcorrencia,
+} from '../types';
 
 type Props = BottomTabScreenProps<MainTabParamList, 'Dashboard'>;
 
 type FiltroCriticidade = 'TODAS' | CriticidadeNivel;
 type ModoVisualizacao = 'MAPA_LISTA' | 'MAPA' | 'LISTA';
 
-/**
- * Converte coordenadas geográficas da região da Av. Paulista / Centro Expandido de SP
- * em posições percentuais (x%, y%) dentro do canvas interativo Dark Map.
- */
+export const DARK_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#121212' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#A1A1AA' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#121212' }] },
+  {
+    featureType: 'administrative',
+    elementType: 'geometry',
+    stylers: [{ color: '#2E2E2E' }],
+  },
+  {
+    featureType: 'poi',
+    elementType: 'geometry',
+    stylers: [{ color: '#18181B' }],
+  },
+  {
+    featureType: 'poi',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#71717A' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'geometry.fill',
+    stylers: [{ color: '#1E1E1E' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'geometry.stroke',
+    stylers: [{ color: '#2E2E2E' }],
+  },
+  {
+    featureType: 'road',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#A1A1AA' }],
+  },
+  {
+    featureType: 'road.highway',
+    elementType: 'geometry',
+    stylers: [{ color: '#27272A' }],
+  },
+  {
+    featureType: 'transit',
+    elementType: 'geometry',
+    stylers: [{ color: '#1E1E1E' }],
+  },
+  {
+    featureType: 'water',
+    elementType: 'geometry',
+    stylers: [{ color: '#0A0A0A' }],
+  },
+  {
+    featureType: 'water',
+    elementType: 'labels.text.fill',
+    stylers: [{ color: '#52525B' }],
+  },
+];
+
+function getMarkerColor(ocorrencia: Ocorrencia): string {
+  const statusMap: Record<StatusOcorrencia, string> = {
+    ABERTO: '#EF4444',
+    EM_ANALISE: '#F59E0B',
+    EM_EXECUCAO: '#38BDF8',
+    CONCLUIDO: '#00E676',
+    CANCELADO: '#71717A',
+  };
+
+  if (ocorrencia.status === 'CONCLUIDO') return '#00E676';
+  if (ocorrencia.status === 'EM_ANALISE') return '#F59E0B';
+  if (ocorrencia.status === 'EM_EXECUCAO') return '#38BDF8';
+  if (ocorrencia.criticidade === 'CRITICA') return '#EF4444';
+  return statusMap[ocorrencia.status] || '#EF4444';
+}
+
 function coordsToCanvasPosition(lat: number, lng: number, index: number) {
   const minLat = -23.57;
   const maxLat = -23.55;
@@ -47,13 +124,23 @@ function coordsToCanvasPosition(lat: number, lng: number, index: number) {
 }
 
 export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
-  const { user } = useAuth();
-  const { ocorrencias, loading, refreshOcorrencias } = useOcorrencias();
+  const { user, signOut } = useAuth();
+  const {
+    ocorrencias,
+    loading,
+    error,
+    listarOcorrencias,
+    refreshOcorrencias,
+  } = useOcorrencias();
 
   const [filtroCriticidade, setFiltroCriticidade] =
     useState<FiltroCriticidade>('TODAS');
   const [modoView, setModoView] = useState<ModoVisualizacao>('MAPA_LISTA');
   const [selectedPin, setSelectedPin] = useState<Ocorrencia | null>(null);
+
+  useEffect(() => {
+    listarOcorrencias().catch(() => {});
+  }, [listarOcorrencias]);
 
   const ocorrenciasFiltradas = useMemo(() => {
     if (filtroCriticidade === 'TODAS') return ocorrencias;
@@ -97,29 +184,59 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
           />
         }
       >
-        {/* Top Bar com Logo Preta Minimalista e Botão de Nova Ocorrência */}
         <View style={styles.topHeader}>
           <View style={styles.brandRow}>
             <FixItLogo size="sm" showTagline={false} />
             <View style={styles.greetingBox}>
-              <Text style={styles.greetingLabel}>PAINEL DE ZELADORIA</Text>
+              <Text style={styles.greetingLabel}>
+                {user?.perfil === 'ROLE_GESTOR'
+                  ? 'GESTÃO PÚBLICA'
+                  : 'PAINEL DE ZELADORIA'}
+              </Text>
               <Text style={styles.greetingName} numberOfLines={1}>
                 Olá, {user?.nome?.split(' ')[0] || 'Munícipe'}
               </Text>
             </View>
           </View>
 
-          <TouchableOpacity
-            style={styles.newCallBtn}
-            onPress={() => navigation.navigate('CreateOcorrencia')}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="add-circle" size={18} color={colors.textInverse} />
-            <Text style={styles.newCallBtnText}>Reportar</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.newCallBtn}
+              onPress={() => navigation.navigate('CreateOcorrencia')}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="add-circle" size={17} color={colors.textInverse} />
+              <Text style={styles.newCallBtnText}>Reportar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.aboutHeaderBtn}
+              onPress={() => navigation.navigate('About')}
+              activeOpacity={0.8}
+              accessibilityLabel="Sobre o App"
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={19}
+                color={colors.accent}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.logoutHeaderBtn}
+              onPress={signOut}
+              activeOpacity={0.8}
+              accessibilityLabel="Sair da Conta"
+            >
+              <Ionicons
+                name="log-out-outline"
+                size={18}
+                color={colors.danger}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Cards de Resumo (KPIs) */}
         <View style={styles.kpiGrid}>
           <View style={styles.kpiCard}>
             <View style={styles.kpiTopRow}>
@@ -193,7 +310,6 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Seletor de Modo (Mapa + Lista / Mapa / Lista) */}
         <View style={styles.modeSwitchContainer}>
           <TouchableOpacity
             style={[
@@ -243,7 +359,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                 modoView === 'MAPA' && styles.modeBtnTextActive,
               ]}
             >
-              Mapa Radar
+              Mapa Interativo
             </Text>
           </TouchableOpacity>
 
@@ -274,7 +390,6 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Filtro Rápido por Cores de Criticidade */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -321,131 +436,206 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
           })}
         </ScrollView>
 
-        {/* MAPA INTERATIVO DARK DE CRITICIDADE URBANA */}
         {(modoView === 'MAPA_LISTA' || modoView === 'MAPA') && (
           <View style={styles.mapSection}>
-            <View style={styles.mapContainer}>
-              {/* Malha Cartográfica Estilizada Dark OLED */}
-              <View style={[styles.gridLineHorizontal, { top: '25%' }]} />
-              <View style={[styles.gridLineHorizontal, { top: '50%' }]} />
-              <View style={[styles.gridLineHorizontal, { top: '75%' }]} />
-              <View style={[styles.gridLineVertical, { left: '25%' }]} />
-              <View style={[styles.gridLineVertical, { left: '50%' }]} />
-              <View style={[styles.gridLineVertical, { left: '75%' }]} />
+            <View
+              style={[
+                styles.mapContainer,
+                modoView === 'MAPA' && styles.mapContainerExpanded,
+              ]}
+            >
+              {Platform.OS !== 'web' ? (
+                <MapView
+                  style={styles.nativeMapView}
+                  customMapStyle={DARK_MAP_STYLE}
+                  userInterfaceStyle="dark"
+                  showsUserLocation
+                  showsMyLocationButton
+                  initialRegion={{
+                    latitude: -23.5614,
+                    longitude: -46.6558,
+                    latitudeDelta: 0.025,
+                    longitudeDelta: 0.025,
+                  }}
+                >
+                  {ocorrenciasFiltradas.map((item) => {
+                    const markerColor = getMarkerColor(item);
+                    const statusLabel = STATUS_META[item.status].label;
+                    const catLabel = CATEGORIAS_META[item.categoria].label;
 
-              {/* Eixos Viários de Referência (Av. Paulista / Consolação / Brigadeiro) */}
-              <View style={styles.avenuePaulista} />
-              <View style={styles.avenueConsolacao} />
-              <View style={styles.avenueBrigadeiro} />
-
-              {/* Rótulos Geográficos no Mapa */}
-              <View style={[styles.mapRoadLabel, { top: 12, left: 12 }]}>
-                <Ionicons
-                  name="navigate-circle-outline"
-                  size={13}
-                  color={colors.primary}
-                />
-                <Text style={styles.mapRoadText}>
-                  SÃO PAULO • EIXO PAULISTA / CENTRO EXPANDIDO
-                </Text>
-              </View>
-
-              <Text
-                style={[
-                  styles.mapStreetName,
-                  { top: '44%', left: '34%' },
-                ]}
-              >
-                AV. PAULISTA
-              </Text>
-              <Text
-                style={[
-                  styles.mapStreetName,
-                  { top: '20%', left: '14%' },
-                ]}
-              >
-                CONSOLAÇÃO
-              </Text>
-              <Text
-                style={[
-                  styles.mapStreetName,
-                  { bottom: '18%', right: '14%' },
-                ]}
-              >
-                JARDINS / BELA VISTA
-              </Text>
-
-              {/* Pinos Interativos Coloridos por Criticidade */}
-              {ocorrenciasFiltradas.map((item, idx) => {
-                const pos = coordsToCanvasPosition(
-                  item.latitude,
-                  item.longitude,
-                  idx
-                );
-                const pinColor = colors.criticidade[item.criticidade];
-                const isSelected = activePin?.id === item.id;
-                const catMeta = CATEGORIAS_META[item.categoria];
-
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    activeOpacity={0.85}
-                    onPress={() => setSelectedPin(item)}
-                    style={[
-                      styles.mapPinWrapper,
-                      pos,
-                      isSelected && styles.mapPinWrapperSelected,
-                    ]}
-                  >
-                    {/* Halo pulsante para pino selecionado ou crítico */}
-                    <View
-                      style={[
-                        styles.pinHalo,
-                        {
-                          backgroundColor: `${pinColor}35`,
-                          borderColor: pinColor,
-                          transform: [{ scale: isSelected ? 1.25 : 1 }],
-                        },
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.pinCore,
-                          { backgroundColor: pinColor },
-                        ]}
+                    return (
+                      <Marker
+                        key={item.id}
+                        coordinate={{
+                          latitude: item.latitude,
+                          longitude: item.longitude,
+                        }}
+                        pinColor={markerColor}
+                        onPress={() => setSelectedPin(item)}
                       >
-                        <Ionicons
-                          name={catMeta.icon as any}
-                          size={isSelected ? 15 : 13}
-                          color="#0A0A0A"
-                        />
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+                        <Callout tooltip>
+                          <View style={styles.calloutCard}>
+                            <View style={styles.calloutTopRow}>
+                              <View
+                                style={[
+                                  styles.calloutDot,
+                                  { backgroundColor: markerColor },
+                                ]}
+                              />
+                              <Text
+                                style={[
+                                  styles.calloutStatus,
+                                  { color: markerColor },
+                                ]}
+                              >
+                                {statusLabel.toUpperCase()} • {item.criticidade}
+                              </Text>
+                            </View>
+                            <Text style={styles.calloutTitle} numberOfLines={2}>
+                              {item.titulo}
+                            </Text>
+                            <Text style={styles.calloutCategory}>
+                              {catLabel}
+                            </Text>
+                            <Text
+                              style={styles.calloutAddress}
+                              numberOfLines={1}
+                            >
+                              {item.enderecoReferencia}
+                            </Text>
+                          </View>
+                        </Callout>
+                      </Marker>
+                    );
+                  })}
+                </MapView>
+              ) : (
+                <>
+                  <View style={[styles.gridLineHorizontal, { top: '25%' }]} />
+                  <View style={[styles.gridLineHorizontal, { top: '50%' }]} />
+                  <View style={[styles.gridLineHorizontal, { top: '75%' }]} />
+                  <View style={[styles.gridLineVertical, { left: '25%' }]} />
+                  <View style={[styles.gridLineVertical, { left: '50%' }]} />
+                  <View style={[styles.gridLineVertical, { left: '75%' }]} />
 
-              {/* Legenda de Cores de Criticidade no Rodapé do Mapa */}
-              <View style={styles.mapLegendBar}>
-                {(
-                  ['CRITICA', 'ALTA', 'MEDIA', 'BAIXA'] as CriticidadeNivel[]
-                ).map((c) => (
-                  <View key={c} style={styles.legendItem}>
-                    <View
-                      style={[
-                        styles.legendDot,
-                        { backgroundColor: colors.criticidade[c] },
-                      ]}
+                  <View style={styles.avenuePaulista} />
+                  <View style={styles.avenueConsolacao} />
+                  <View style={styles.avenueBrigadeiro} />
+
+                  <View style={[styles.mapRoadLabel, { top: 12, left: 12 }]}>
+                    <Ionicons
+                      name="navigate-circle-outline"
+                      size={13}
+                      color={colors.primary}
                     />
-                    <Text style={styles.legendText}>
-                      {CRITICIDADE_META[c].label}
+                    <Text style={styles.mapRoadText}>
+                      SÃO PAULO • EIXO PAULISTA / CENTRO EXPANDIDO
                     </Text>
                   </View>
-                ))}
+
+                  <Text
+                    style={[
+                      styles.mapStreetName,
+                      { top: '44%', left: '34%' },
+                    ]}
+                  >
+                    AV. PAULISTA
+                  </Text>
+                  <Text
+                    style={[
+                      styles.mapStreetName,
+                      { top: '20%', left: '14%' },
+                    ]}
+                  >
+                    CONSOLAÇÃO
+                  </Text>
+                  <Text
+                    style={[
+                      styles.mapStreetName,
+                      { bottom: '18%', right: '14%' },
+                    ]}
+                  >
+                    JARDINS / BELA VISTA
+                  </Text>
+
+                  {ocorrenciasFiltradas.map((item, idx) => {
+                    const pos = coordsToCanvasPosition(
+                      item.latitude,
+                      item.longitude,
+                      idx
+                    );
+                    const pinColor = getMarkerColor(item);
+                    const isSelected = activePin?.id === item.id;
+                    const catMeta = CATEGORIAS_META[item.categoria];
+
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        activeOpacity={0.85}
+                        onPress={() => setSelectedPin(item)}
+                        style={[
+                          styles.mapPinWrapper,
+                          pos,
+                          isSelected && styles.mapPinWrapperSelected,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.pinHalo,
+                            {
+                              backgroundColor: `${pinColor}35`,
+                              borderColor: pinColor,
+                              transform: [{ scale: isSelected ? 1.25 : 1 }],
+                            },
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.pinCore,
+                              { backgroundColor: pinColor },
+                            ]}
+                          >
+                            <Ionicons
+                              name={catMeta.icon as any}
+                              size={isSelected ? 15 : 13}
+                              color="#0A0A0A"
+                            />
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </>
+              )}
+
+              <View style={styles.mapLegendBar}>
+                <View style={styles.legendItem}>
+                  <View
+                    style={[styles.legendDot, { backgroundColor: '#EF4444' }]}
+                  />
+                  <Text style={styles.legendText}>Aberto/Crítico</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View
+                    style={[styles.legendDot, { backgroundColor: '#F59E0B' }]}
+                  />
+                  <Text style={styles.legendText}>Em Análise</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View
+                    style={[styles.legendDot, { backgroundColor: '#38BDF8' }]}
+                  />
+                  <Text style={styles.legendText}>Execução</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View
+                    style={[styles.legendDot, { backgroundColor: '#00E676' }]}
+                  />
+                  <Text style={styles.legendText}>Concluído</Text>
+                </View>
               </View>
             </View>
 
-            {/* Card Interativo do Pino Selecionado no Mapa */}
             {activePin && (
               <View style={styles.selectedPinCard}>
                 <View style={styles.selectedPinHeader}>
@@ -515,7 +705,6 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         )}
 
-        {/* LISTA DE OCORRÊNCIAS MONITORADAS */}
         {(modoView === 'MAPA_LISTA' || modoView === 'LISTA') && (
           <View style={styles.listSection}>
             <View style={styles.sectionHeaderRow}>
@@ -527,13 +716,45 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
               </Text>
             </View>
 
-            {ocorrenciasFiltradas.map((item) => (
-              <OcorrenciaCard
-                key={item.id}
-                ocorrencia={item}
-                onPress={() => setSelectedPin(item)}
-              />
-            ))}
+            {!!error && (
+              <View style={styles.errorContainer}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={24}
+                  color="#EF4444"
+                />
+                <Text style={styles.errorText}>{error}</Text>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={() => listarOcorrencias().catch(() => {})}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name="refresh-outline"
+                    size={16}
+                    color={colors.textInverse}
+                  />
+                  <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {loading && ocorrencias.length === 0 ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.loadingText}>
+                  Sincronizando ocorrências com a API Fix-It...
+                </Text>
+              </View>
+            ) : (
+              ocorrenciasFiltradas.map((item) => (
+                <OcorrenciaCard
+                  key={item.id}
+                  ocorrencia={item}
+                  onPress={() => setSelectedPin(item)}
+                />
+              ))
+            )}
           </View>
         )}
       </ScrollView>
@@ -544,7 +765,7 @@ export const DashboardScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#121212',
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
@@ -576,6 +797,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+  },
   newCallBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -590,6 +816,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
   },
+  logoutHeaderBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: colors.dangerMuted,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aboutHeaderBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: colors.accentMuted,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   kpiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -599,11 +845,11 @@ const styles = StyleSheet.create({
   kpiCard: {
     flex: 1,
     minWidth: '47%',
-    backgroundColor: colors.surface,
+    backgroundColor: '#1E1E1E',
     borderRadius: radius.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
   },
   kpiTopRow: {
     flexDirection: 'row',
@@ -623,11 +869,11 @@ const styles = StyleSheet.create({
   },
   modeSwitchContainer: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
+    backgroundColor: '#1E1E1E',
     borderRadius: radius.md,
     padding: 4,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
     marginBottom: spacing.md,
   },
   modeBtn: {
@@ -658,12 +904,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: colors.surface,
+    backgroundColor: '#1E1E1E',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
   },
   filterDot: {
     width: 8,
@@ -679,13 +925,62 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   mapContainer: {
-    height: 250,
+    height: 270,
     backgroundColor: '#0D1117',
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
     overflow: 'hidden',
     position: 'relative',
+  },
+  mapContainerExpanded: {
+    height: 390,
+  },
+  nativeMapView: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  calloutCard: {
+    width: 220,
+    backgroundColor: '#1E1E1E',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  calloutTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 4,
+  },
+  calloutDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  calloutStatus: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  calloutTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 17,
+  },
+  calloutCategory: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  calloutAddress: {
+    color: '#A1A1AA',
+    fontSize: 11,
+    marginTop: 2,
   },
   gridLineHorizontal: {
     position: 'absolute',
@@ -741,7 +1036,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
   },
   mapRoadText: {
     color: colors.textSecondary,
@@ -788,10 +1083,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    backgroundColor: 'rgba(10, 10, 10, 0.88)',
+    backgroundColor: 'rgba(18, 18, 18, 0.92)',
     paddingVertical: 7,
     borderTopWidth: 1,
-    borderTopColor: colors.surfaceBorder,
+    borderTopColor: '#333333',
   },
   legendItem: {
     flexDirection: 'row',
@@ -810,11 +1105,11 @@ const styles = StyleSheet.create({
   },
   selectedPinCard: {
     marginTop: spacing.sm,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: '#1E1E1E',
     borderRadius: radius.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
   },
   selectedPinHeader: {
     gap: 4,
@@ -840,12 +1135,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   selectedPinTitle: {
-    color: colors.textPrimary,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
   },
   selectedPinAddress: {
-    color: colors.textSecondary,
+    color: '#A1A1AA',
     fontSize: 12,
   },
   selectedPinFooter: {
@@ -855,7 +1150,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     paddingTop: spacing.xs,
     borderTopWidth: 1,
-    borderTopColor: colors.surfaceBorder,
+    borderTopColor: '#333333',
     gap: spacing.sm,
   },
   statusInline: {
@@ -889,5 +1184,54 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 12,
     fontWeight: '700',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E1E1E',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: '#333333',
+    paddingVertical: spacing.xxxl,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  loadingText: {
+    color: '#A1A1AA',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: spacing.md,
+    textAlign: 'center',
+  },
+  errorContainer: {
+    alignItems: 'center',
+    backgroundColor: colors.dangerMuted,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 13.5,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#00E676',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.md,
+    marginTop: spacing.xs,
+  },
+  retryButtonText: {
+    color: '#0A0A0A',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

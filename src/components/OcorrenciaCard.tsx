@@ -50,7 +50,6 @@ export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
       onPress={onPress}
       style={styles.card}
     >
-      {/* Barra lateral de criticidade */}
       <View
         style={[
           styles.criticidadeStripe,
@@ -59,7 +58,6 @@ export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
       />
 
       <View style={styles.content}>
-        {/* Cabeçalho com Badges */}
         <View style={styles.headerRow}>
           <View
             style={[
@@ -103,7 +101,6 @@ export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
           )}
         </View>
 
-        {/* Título e Categoria */}
         <View style={styles.titleRow}>
           <View style={styles.categoryIconBox}>
             <Ionicons
@@ -126,12 +123,10 @@ export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
           )}
         </View>
 
-        {/* Descrição */}
         <Text style={styles.description} numberOfLines={2}>
           {ocorrencia.descricao}
         </Text>
 
-        {/* Localização e Data */}
         <View style={styles.metaRow}>
           <View style={styles.locationRow}>
             <Ionicons
@@ -146,7 +141,6 @@ export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
           <Text style={styles.dateText}>{formattedDate}</Text>
         </View>
 
-        {/* Resumo Triagem IA */}
         {ocorrencia.parecerIa && (
           <View style={styles.aiBox}>
             <Ionicons
@@ -161,7 +155,6 @@ export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
           </View>
         )}
 
-        {/* Ações (Detalhes e Cancelamento na tela Minhas Ocorrências) */}
         {showActions && (
           <View style={styles.actionsRow}>
             <TouchableOpacity
@@ -177,7 +170,7 @@ export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
               <Text style={styles.detailButtonText}>Ver Parecer & OS</Text>
             </TouchableOpacity>
 
-            {onDelete && (
+            {onDelete && ocorrencia.status === 'ABERTO' ? (
               <TouchableOpacity
                 style={styles.deleteButton}
                 onPress={onDelete}
@@ -190,6 +183,17 @@ export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
                 />
                 <Text style={styles.deleteButtonText}>Cancelar Chamado</Text>
               </TouchableOpacity>
+            ) : (
+              onDelete && (
+                <View style={styles.lockedDeleteBadge}>
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={13}
+                    color={colors.textMuted}
+                  />
+                  <Text style={styles.lockedDeleteText}>Em Triagem/OS</Text>
+                </View>
+              )
             )}
           </View>
         )}
@@ -201,12 +205,17 @@ export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
 const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
+    backgroundColor: '#1E1E1E',
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
     marginBottom: spacing.md,
     overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
   },
   criticidadeStripe: {
     width: 5,
@@ -362,5 +371,22 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontSize: 12,
     fontWeight: '700',
+  },
+  lockedDeleteBadge: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+  },
+  lockedDeleteText: {
+    color: colors.textMuted,
+    fontSize: 11.5,
+    fontWeight: '600',
   },
 });

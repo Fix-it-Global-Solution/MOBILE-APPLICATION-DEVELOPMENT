@@ -9,9 +9,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { FixItLogo } from '../components/FixItLogo';
-import { PrimaryButton } from '../components/PrimaryButton';
 import { useAuth } from '../context/AuthContext';
-import { colors, radius, spacing, typography } from '../styles/theme';
+import { colors, radius, shadows, spacing, typography } from '../styles/theme';
+
+export const APP_VERSION = 'Versão 1.0.0';
+export const COMMIT_HASH_REF = '368e37d';
 
 interface TeamMember {
   nome: string;
@@ -47,8 +49,6 @@ const EQUIPE_2TDSPF: TeamMember[] = [
   },
 ];
 
-const COMMIT_HASH_REF = 'cb5f0a1';
-
 export const AboutScreen: React.FC = () => {
   const { user, signOut } = useAuth();
   const [copiedFeedback, setCopiedFeedback] = useState(false);
@@ -64,68 +64,21 @@ export const AboutScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Identidade Oficial do Fix-It */}
         <View style={styles.heroCard}>
           <FixItLogo size="lg" showTagline />
-          <Text style={styles.appTitle}>Fix-It • Cuidando da Nossa Cidade</Text>
-          <Text style={styles.appVersion}>
-            Global Solution FIAP 2026 • Plataforma CitizenTech v1.0.0
+          <Text style={styles.appTitle}>Fix-It • Zeladoria Urbana Sustentável</Text>
+          <Text style={styles.appVersionBadge}>
+            Global Solution FIAP • CitizenTech ({APP_VERSION})
           </Text>
           <Text style={styles.appDescription}>
-            Plataforma colaborativa de zeladoria urbana inteligente que conecta
-            cidadãos e prefeituras usando geolocalização, visão computacional
-            via Google Gemini e processamento assíncrono com RabbitMQ.
+            Plataforma CitizenTech de zeladoria urbana sustentável que conecta
+            munícipes e gestão pública em tempo real. Utiliza geolocalização
+            GPS, triagem inteligente por Visão Computacional (Spring AI + Google
+            Gemini) e mensageria assíncrona (RabbitMQ) para priorizar e acelerar
+            a manutenção da infraestrutura da cidade.
           </Text>
         </View>
 
-        {/* Card de Referência de Build e Hash do Commit (Exigência do Edital) */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Ionicons
-              name="git-commit-outline"
-              size={20}
-              color={colors.primary}
-            />
-            <Text style={styles.sectionTitle}>
-              Rastreabilidade & Commit de Referência
-            </Text>
-          </View>
-
-          <View style={styles.commitBox}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.commitLabel}>
-                HASH DO COMMIT ATUAL (GIT HEAD)
-              </Text>
-              <Text style={styles.commitHashValue}>#{COMMIT_HASH_REF}</Text>
-              <Text style={styles.commitMeta}>
-                Branch: main • Turma Oficial: 2TDSPF • SDK: Expo 58 (React
-                Native)
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.copyHashBtn}
-              onPress={handleCopyHash}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={copiedFeedback ? 'checkmark' : 'copy-outline'}
-                size={16}
-                color={copiedFeedback ? colors.primary : colors.accent}
-              />
-              <Text
-                style={[
-                  styles.copyHashText,
-                  copiedFeedback && { color: colors.primary },
-                ]}
-              >
-                {copiedFeedback ? 'Verificado' : 'Hash'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Equipe de Desenvolvimento — Turma 2TDSPF */}
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Ionicons name="people-outline" size={20} color={colors.accent} />
@@ -148,6 +101,9 @@ export const AboutScreen: React.FC = () => {
 
               <View style={styles.memberInfo}>
                 <Text style={styles.memberName}>{integrante.nome}</Text>
+                <Text style={styles.memberFormattedLine}>
+                  {integrante.nome} | RM: {integrante.rm} | {integrante.turma}
+                </Text>
                 <Text style={styles.memberRole}>{integrante.funcao}</Text>
               </View>
 
@@ -159,7 +115,6 @@ export const AboutScreen: React.FC = () => {
           ))}
         </View>
 
-        {/* Ecossistema Tecnológico Integrado */}
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Ionicons
@@ -168,7 +123,7 @@ export const AboutScreen: React.FC = () => {
               color={colors.primary}
             />
             <Text style={styles.sectionTitle}>
-              Arquitetura Integrada da Solução
+              Ecossistema Tecnológico Integrado
             </Text>
           </View>
 
@@ -190,12 +145,11 @@ export const AboutScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Sessão Autenticada e Botão de Logout */}
         <View style={styles.userSessionCard}>
           <View style={styles.userSessionRow}>
             <Ionicons
               name="person-circle-outline"
-              size={36}
+              size={38}
               color={colors.primary}
             />
             <View style={{ flex: 1 }}>
@@ -208,13 +162,45 @@ export const AboutScreen: React.FC = () => {
             </View>
           </View>
 
-          <PrimaryButton
-            title="Encerrar Sessão (Logout)"
-            variant="danger"
-            icon="log-out-outline"
+          <TouchableOpacity
+            style={styles.logoutSolidButton}
             onPress={signOut}
-            style={{ marginTop: spacing.md }}
-          />
+            activeOpacity={0.85}
+          >
+            <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
+            <Text style={styles.logoutSolidButtonText}>Sair</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.footerVersionCard}>
+          <View style={styles.footerVersionRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.footerVersionText}>{APP_VERSION}</Text>
+              <Text style={styles.footerCommitText}>
+                Commit Hash de Referência: {COMMIT_HASH_REF}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.copyHashBtn}
+              onPress={handleCopyHash}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={copiedFeedback ? 'checkmark' : 'git-commit-outline'}
+                size={16}
+                color={copiedFeedback ? colors.primary : colors.accent}
+              />
+              <Text
+                style={[
+                  styles.copyHashText,
+                  copiedFeedback && { color: colors.primary },
+                ]}
+              >
+                {copiedFeedback ? 'Copiado' : `#${COMMIT_HASH_REF}`}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -232,20 +218,21 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
   },
   heroCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#1E1E1E',
     borderRadius: radius.xl,
     padding: spacing.xl,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
     marginBottom: spacing.lg,
+    ...shadows.card,
   },
   appTitle: {
     ...typography.h2,
     textAlign: 'center',
     marginTop: spacing.md,
   },
-  appVersion: {
+  appVersionBadge: {
     color: colors.primary,
     fontSize: 12,
     fontWeight: '700',
@@ -257,12 +244,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   sectionCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#1E1E1E',
     borderRadius: radius.lg,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
     marginBottom: spacing.lg,
+    ...shadows.card,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -273,55 +261,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.h3,
   },
-  commitBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.backgroundSecondary,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.surfaceBorder,
-    gap: spacing.md,
-  },
-  commitLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.7,
-  },
-  commitHashValue: {
-    color: colors.primary,
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginVertical: 2,
-  },
-  commitMeta: {
-    color: colors.textSecondary,
-    fontSize: 11.5,
-  },
-  copyHashBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: colors.accentMuted,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.accent,
-  },
-  copyHashText: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '700',
-  },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.sm + 4,
     borderTopWidth: 1,
-    borderTopColor: colors.surfaceBorder,
+    borderTopColor: '#333333',
     gap: spacing.md,
   },
   avatarCircle: {
@@ -343,23 +288,29 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   memberName: {
-    color: colors.textPrimary,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
   },
+  memberFormattedLine: {
+    color: colors.accent,
+    fontSize: 11.5,
+    fontWeight: '600',
+    marginTop: 2,
+  },
   memberRole: {
-    color: colors.textSecondary,
+    color: '#A1A1AA',
     fontSize: 11.5,
     marginTop: 2,
   },
   rmBadge: {
     alignItems: 'flex-end',
-    backgroundColor: colors.backgroundSecondary,
+    backgroundColor: '#121212',
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: 5,
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
   },
   rmText: {
     color: colors.accent,
@@ -377,24 +328,26 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   techPill: {
-    backgroundColor: colors.backgroundSecondary,
+    backgroundColor: '#121212',
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
     borderRadius: radius.full,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
   },
   techPillText: {
-    color: colors.textSecondary,
+    color: '#A1A1AA',
     fontSize: 12,
     fontWeight: '600',
   },
   userSessionCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#1E1E1E',
     borderRadius: radius.lg,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
+    marginBottom: spacing.lg,
+    ...shadows.card,
   },
   userSessionRow: {
     flexDirection: 'row',
@@ -402,13 +355,70 @@ const styles = StyleSheet.create({
     gap: spacing.sm + 2,
   },
   sessionUserTitle: {
-    color: colors.textPrimary,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
   },
   sessionUserEmail: {
-    color: colors.textSecondary,
+    color: '#A1A1AA',
     fontSize: 12,
     marginTop: 2,
+  },
+  logoutSolidButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: '#EF4444',
+    minHeight: 50,
+    borderRadius: radius.md,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  logoutSolidButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  footerVersionCard: {
+    backgroundColor: '#121212',
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  footerVersionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  footerVersionText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  footerCommitText: {
+    color: colors.primary,
+    fontSize: 12.5,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  copyHashBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.accentMuted,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.accent,
+  },
+  copyHashText: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

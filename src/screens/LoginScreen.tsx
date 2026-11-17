@@ -20,28 +20,57 @@ import { AuthStackParamList } from '../types';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const { signIn } = useAuth();
 
-  const [email, setEmail] = useState('cidadao@fixit.com.br');
-  const [senha, setSenha] = useState('Password@123');
+  const [email, setEmail] = useState('cidadao@fixit.com');
+  const [senha, setSenha] = useState('123456');
   const [loading, setLoading] = useState(false);
+
+  const [emailError, setEmailError] = useState('');
+  const [senhaError, setSenhaError] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleLogin = async () => {
+  const validateForm = (): boolean => {
+    let isValid = true;
+    setEmailError('');
+    setSenhaError('');
     setErrorMessage('');
 
-    if (!email.trim() || !senha.trim()) {
-      setErrorMessage('Preencha seu e-mail e senha para acessar o Fix-It.');
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
+      setEmailError('O campo de e-mail é obrigatório.');
+      isValid = false;
+    } else if (!EMAIL_REGEX.test(trimmedEmail)) {
+      setEmailError('Informe um endereço de e-mail válido (ex: cidadao@fixit.com).');
+      isValid = false;
+    }
+
+    if (!senha.trim()) {
+      setSenhaError('O campo de senha é obrigatório.');
+      isValid = false;
+    } else if (senha.length < 6) {
+      setSenhaError('A senha deve possuir no mínimo 6 caracteres.');
+      isValid = false;
+    }
+
+    return isValid;
+  };
+
+  const handleLogin = async () => {
+    if (!validateForm()) {
       return;
     }
 
     setLoading(true);
     try {
-      await signIn({ email, senha });
+      await signIn(email.trim(), senha);
     } catch (err: any) {
       setErrorMessage(
-        err?.message || 'Não foi possível autenticar. Tente novamente.'
+        err?.message || 'Não foi possível autenticar. Verifique suas credenciais.'
       );
     } finally {
       setLoading(false);
@@ -49,13 +78,17 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const fillDemoCredentials = (tipo: 'CIDADAO' | 'GESTOR') => {
+    if (loading) return;
+    setEmailError('');
+    setSenhaError('');
     setErrorMessage('');
+
     if (tipo === 'CIDADAO') {
-      setEmail('cidadao@fixit.com.br');
-      setSenha('Password@123');
+      setEmail('cidadao@fixit.com');
+      setSenha('123456');
     } else {
-      setEmail('gestor@fixit.com.br');
-      setSenha('Password@123');
+      setEmail('gestor@fixit.com');
+      setSenha('123456');
     }
   };
 
@@ -70,7 +103,6 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Identidade Visual Oficial */}
           <View style={styles.headerSection}>
             <FixItLogo size="lg" showTagline />
             <Text style={styles.title}>Zeladoria Urbana Colaborativa</Text>
@@ -80,7 +112,6 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
             </Text>
           </View>
 
-          {/* Card de Autenticação */}
           <View style={styles.formCard}>
             <View style={styles.cardHeaderRow}>
               <Text style={styles.cardTitle}>Acesso do Munícipe</Text>
@@ -106,41 +137,54 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
             )}
 
             <CustomInput
-              label="E-mail Cadastrado"
-              placeholder="exemplo@fixit.com.br"
+              label="E-mail"
+              placeholder="cidadao@fixit.com"
               icon="mail-outline"
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              editable={!loading}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setEmail(text);
+                if (emailError) setEmailError('');
+                if (errorMessage) setErrorMessage('');
+              }}
+              error={emailError}
             />
 
             <CustomInput
-              label="Senha de Acesso"
+              label="Senha"
               placeholder="Digite sua senha"
               icon="lock-closed-outline"
               isPassword
+              editable={!loading}
               value={senha}
-              onChangeText={setSenha}
+              onChangeText={(text) => {
+                setSenha(text);
+                if (senhaError) setSenhaError('');
+                if (errorMessage) setErrorMessage('');
+              }}
+              error={senhaError}
             />
 
             <PrimaryButton
-              title="Entrar na Plataforma"
+              title="Entrar"
               icon="log-in-outline"
               loading={loading}
+              disabled={loading}
               onPress={handleLogin}
               style={{ marginTop: spacing.xs }}
             />
 
-            {/* Atalhos para Avaliação Rápida */}
             <View style={styles.demoSection}>
               <Text style={styles.demoLabel}>
-                Preenchimento rápido (Credenciais de Teste API):
+                Atalho de Demonstração (DataSeeder Oficial):
               </Text>
               <View style={styles.demoRow}>
                 <TouchableOpacity
-                  style={styles.demoChip}
+                  style={[styles.demoChip, loading && styles.disabledChip]}
+                  disabled={loading}
                   onPress={() => fillDemoCredentials('CIDADAO')}
                 >
                   <Ionicons
@@ -148,11 +192,14 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
                     size={13}
                     color={colors.primary}
                   />
-                  <Text style={styles.demoChipText}>Munícipe Cidadão</Text>
+                  <Text style={styles.demoChipText}>
+                    Preencher Cidadão Demo
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.demoChip}
+                  style={[styles.demoChip, loading && styles.disabledChip]}
+                  disabled={loading}
                   onPress={() => fillDemoCredentials('GESTOR')}
                 >
                   <Ionicons
@@ -161,21 +208,21 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
                     color={colors.accent}
                   />
                   <Text style={[styles.demoChipText, { color: colors.accent }]}>
-                    Gestor Público
+                    Gestor Demo
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
 
-          {/* Rodapé para Cadastro */}
           <View style={styles.footerRow}>
-            <Text style={styles.footerText}>Ainda não possui conta?</Text>
+            <Text style={styles.footerText}>Ainda não tem conta?</Text>
             <TouchableOpacity
+              disabled={loading}
               onPress={() => navigation.navigate('Register')}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={styles.footerLink}>Cadastrar novo munícipe</Text>
+              <Text style={styles.footerLink}>Cadastre-se</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -187,7 +234,7 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#0A0A0A',
   },
   flex: {
     flex: 1,
@@ -214,11 +261,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   formCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#121212',
     borderRadius: radius.xl,
     padding: spacing.xl,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -249,14 +296,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     backgroundColor: colors.dangerMuted,
     borderWidth: 1,
-    borderColor: colors.danger,
+    borderColor: '#EF4444',
     borderRadius: radius.md,
     padding: spacing.md,
     marginBottom: spacing.lg,
   },
   errorBannerText: {
     flex: 1,
-    color: colors.danger,
+    color: '#EF4444',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -264,7 +311,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.surfaceBorder,
+    borderTopColor: '#333333',
   },
   demoLabel: {
     color: colors.textMuted,
@@ -281,15 +328,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.xs,
     borderRadius: radius.sm,
-    backgroundColor: colors.backgroundSecondary,
+    backgroundColor: '#1E1E1E',
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
+  },
+  disabledChip: {
+    opacity: 0.5,
   },
   demoChipText: {
     color: colors.primary,
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
   },
   footerRow: {
@@ -300,11 +351,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
   },
   footerText: {
-    color: colors.textSecondary,
+    color: '#A1A1AA',
     fontSize: 14,
   },
   footerLink: {
-    color: colors.primary,
+    color: '#00E676',
     fontSize: 14,
     fontWeight: '700',
   },

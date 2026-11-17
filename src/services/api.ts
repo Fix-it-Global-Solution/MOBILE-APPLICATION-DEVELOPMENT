@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
@@ -9,15 +9,33 @@ export const STORAGE_KEYS = {
   REGISTERED_USERS: '@FixIt:registered_users',
 };
 
-/**
- * Emulador Android usa 10.0.2.2 para acessar o localhost da máquina host (API Java Spring Boot na porta 8080).
- * iOS Simulator e Web utilizam localhost:8080 diretamente.
- */
-const DEFAULT_HOST = Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
-export const API_BASE_URL = `${DEFAULT_HOST}/api/v1`;
+export const ANDROID_EMULATOR_HOST = 'http://10.0.2.2:8080';
+export const LOCALHOST_HOST = 'http://localhost:8080';
+
+export const DEFAULT_HOST =
+  Platform.OS === 'android' ? ANDROID_EMULATOR_HOST : LOCALHOST_HOST;
+export const ALTERNATE_HOST =
+  Platform.OS === 'android' ? LOCALHOST_HOST : ANDROID_EMULATOR_HOST;
+
+export const BASE_URL = `${DEFAULT_HOST}/api/v1`;
+export const ALTERNATE_BASE_URL = `${ALTERNATE_HOST}/api/v1`;
+export const API_BASE_URL = BASE_URL;
+
+interface RetryableRequestConfig extends InternalAxiosRequestConfig {
+  _retriedAlternateHost?: boolean;
+}
+
+type UnauthorizedCallback = () => void | Promise<void>;
+let unauthorizedHandler: UnauthorizedCallback | null = null;
+
+export function registerUnauthorizedHandler(
+  callback: UnauthorizedCallback | null
+): void {
+  unauthorizedHandler = callback;
+}
 
 export const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: BASE_URL,
   timeout: 4500,
   headers: {
     'Content-Type': 'application/json',
@@ -25,7 +43,14 @@ export const api = axios.create({
   },
 });
 
-// Interceptor para injetar automaticamente o token JWT Bearer em todas as requisições autenticadas
+export function setAxiosAuthToken(token: string | null): void {
+  if (token) {
+    api.defaults.headers.common.Authorization = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common.Authorization;
+  }
+}
+
 api.interceptors.request.use(
   async (config) => {
     try {
@@ -33,12 +58,50 @@ api.interceptors.request.use(
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
       }
-    } catch {
-      // Silencia erro de leitura do storage
-    }
+    } catch {}
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const originalConfig = error.config as RetryableRequestConfig | undefined;
+
+    if (
+      !error.response &&
+      originalConfig &&
+      !originalConfig._retriedAlternateHost
+    ) {
+      originalConfig._retriedAlternateHost = true;
+      originalConfig.baseURL =
+        originalConfig.baseURL === BASE_URL ? ALTERNATE_BASE_URL : BASE_URL;
+      try {
+        return await api.request(originalConfig);
+      } catch (retryError) {
+        error = retryError as AxiosError;
+      }
+    }
+
+    const status = error.response?.status;
+    const requestUrl = originalConfig?.url || '';
+    const isAuthLoginOrRegister =
+      requestUrl.includes('/auth/login') ||
+      requestUrl.includes('/auth/registrar');
+
+    if ((status === 401 || status === 403) && !isAuthLoginOrRegister) {
+      setAxiosAuthToken(null);
+      try {
+        await AsyncStorage.multiRemove([STORAGE_KEYS.TOKEN, STORAGE_KEYS.USER]);
+      } catch {}
+      if (unauthorizedHandler) {
+        await unauthorizedHandler();
+      }
+    }
+
+    return Promise.reject(error);
+  }
 );
 
 export default api;

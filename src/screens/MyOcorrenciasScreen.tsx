@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Image,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +17,7 @@ import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { OcorrenciaCard } from '../components/OcorrenciaCard';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { useAuth } from '../context/AuthContext';
 import { useOcorrencias } from '../context/OcorrenciaContext';
 import {
   CATEGORIAS_META,
@@ -27,11 +30,12 @@ import { MainTabParamList, Ocorrencia } from '../types';
 type Props = BottomTabScreenProps<MainTabParamList, 'MyOcorrencias'>;
 
 export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
+  const { signOut } = useAuth();
   const {
     minhasOcorrencias,
     loading,
     refreshOcorrencias,
-    excluirOcorrencia,
+    cancelarOcorrencia,
   } = useOcorrencias();
 
   const [busca, setBusca] = useState('');
@@ -40,6 +44,7 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
   const [confirmDeleteItem, setConfirmDeleteItem] =
     useState<Ocorrencia | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   const listaFiltrada = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -52,15 +57,64 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
     );
   }, [minhasOcorrencias, busca]);
 
+  const requestCancelOcorrencia = (item: Ocorrencia) => {
+    setActionError('');
+    if (item.status !== 'ABERTO') {
+      const msg =
+        'Apenas ocorrências com status "ABERTO" podem ser canceladas.';
+      setActionError(msg);
+      if (Platform.OS !== 'web') {
+        Alert.alert('Cancelamento Indisponível', msg);
+      }
+      return;
+    }
+
+    if (Platform.OS !== 'web') {
+      Alert.alert(
+        'Cancelar Ordem de Serviço?',
+        `Deseja realmente cancelar o chamado "${item.titulo}" (#${item.protocoloOs})? Esta ação não poderá ser desfeita.`,
+        [
+          { text: 'Voltar', style: 'cancel' },
+          {
+            text: 'Confirmar Cancelamento',
+            style: 'destructive',
+            onPress: async () => {
+              setDeleting(true);
+              try {
+                await cancelarOcorrencia(item.id);
+                if (detalheSelecionado?.id === item.id) {
+                  setDetalheSelecionado(null);
+                }
+              } catch (err: any) {
+                setActionError(
+                  err?.message || 'Não foi possível cancelar a ocorrência.'
+                );
+              } finally {
+                setDeleting(false);
+              }
+            },
+          },
+        ]
+      );
+    } else {
+      setConfirmDeleteItem(item);
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!confirmDeleteItem) return;
     setDeleting(true);
+    setActionError('');
     try {
-      await excluirOcorrencia(confirmDeleteItem.id);
+      await cancelarOcorrencia(confirmDeleteItem.id);
       if (detalheSelecionado?.id === confirmDeleteItem.id) {
         setDetalheSelecionado(null);
       }
       setConfirmDeleteItem(null);
+    } catch (err: any) {
+      setActionError(
+        err?.message || 'Não foi possível cancelar a ocorrência.'
+      );
     } finally {
       setDeleting(false);
     }
@@ -69,20 +123,32 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
-        {/* Cabeçalho */}
         <View style={styles.headerRow}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.title}>Meus Chamados</Text>
             <Text style={styles.subtitle}>
               Acompanhe o parecer da IA ou cancele solicitações abertas
             </Text>
           </View>
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>{minhasOcorrencias.length}</Text>
+          <View style={styles.headerRightActions}>
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{minhasOcorrencias.length}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.logoutHeaderBtn}
+              onPress={signOut}
+              activeOpacity={0.8}
+              accessibilityLabel="Sair da Conta"
+            >
+              <Ionicons
+                name="log-out-outline"
+                size={18}
+                color={colors.danger}
+              />
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Barra de Pesquisa */}
         <View style={styles.searchBar}>
           <Ionicons
             name="search-outline"
@@ -107,7 +173,17 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
           )}
         </View>
 
-        {/* Lista de Chamados do Usuário */}
+        {!!actionError && (
+          <View style={styles.errorBanner}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={18}
+              color={colors.danger}
+            />
+            <Text style={styles.errorBannerText}>{actionError}</Text>
+          </View>
+        )}
+
         <FlatList
           data={listaFiltrada}
           keyExtractor={(item) => String(item.id)}
@@ -120,7 +196,7 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
               ocorrencia={item}
               showActions
               onPress={() => setDetalheSelecionado(item)}
-              onDelete={() => setConfirmDeleteItem(item)}
+              onDelete={() => requestCancelOcorrencia(item)}
             />
           )}
           ListEmptyComponent={
@@ -149,7 +225,6 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
           }
         />
 
-        {/* MODAL DE DETALHES DA OCORRÊNCIA E PARECER IA */}
         <Modal
           visible={!!detalheSelecionado}
           transparent
@@ -280,16 +355,18 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
                   )}
 
                   <View style={styles.modalActions}>
-                    <PrimaryButton
-                      title="Cancelar / Excluir Chamado"
-                      variant="danger"
-                      icon="trash-outline"
-                      onPress={() => {
-                        const target = detalheSelecionado;
-                        setDetalheSelecionado(null);
-                        setConfirmDeleteItem(target);
-                      }}
-                    />
+                    {detalheSelecionado.status === 'ABERTO' && (
+                      <PrimaryButton
+                        title="Cancelar / Excluir Chamado"
+                        variant="danger"
+                        icon="trash-outline"
+                        onPress={() => {
+                          const target = detalheSelecionado;
+                          setDetalheSelecionado(null);
+                          requestCancelOcorrencia(target);
+                        }}
+                      />
+                    )}
                     <PrimaryButton
                       title="Fechar Detalhes"
                       variant="outline"
@@ -303,7 +380,6 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         </Modal>
 
-        {/* MODAL DE CONFIRMAÇÃO DE CANCELAMENTO (DELETE) */}
         <Modal
           visible={!!confirmDeleteItem}
           transparent
@@ -375,6 +451,11 @@ const styles = StyleSheet.create({
     ...typography.body,
     marginTop: 2,
   },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+  },
   countBadge: {
     minWidth: 38,
     height: 38,
@@ -385,6 +466,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
+  },
+  logoutHeaderBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: colors.dangerMuted,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   countText: {
     color: colors.primary,
@@ -407,6 +498,23 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.textPrimary,
     fontSize: 14,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.dangerMuted,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  errorBannerText: {
+    flex: 1,
+    color: '#EF4444',
+    fontSize: 13,
+    fontWeight: '600',
   },
   listContent: {
     paddingBottom: spacing.xxxl,

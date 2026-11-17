@@ -6,17 +6,34 @@ import React, {
   useState,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../services/api';
+import {
+  registerUnauthorizedHandler,
+  setAxiosAuthToken,
+  STORAGE_KEYS,
+} from '../services/api';
 import { authService } from '../services/authService';
-import { LoginRequestDTO, RegisterRequestDTO, Usuario } from '../types';
+import {
+  LoginRequestDTO,
+  PerfilUsuario,
+  RegisterRequestDTO,
+  Usuario,
+} from '../types';
 
-interface AuthContextData {
+export interface AuthContextData {
   user: Usuario | null;
   token: string | null;
   loading: boolean;
   isAuthenticated: boolean;
-  signIn: (credentials: LoginRequestDTO) => Promise<void>;
-  signUp: (data: RegisterRequestDTO) => Promise<void>;
+  signIn: (
+    emailOrCredentials: string | LoginRequestDTO,
+    senha?: string
+  ) => Promise<void>;
+  signUp: (
+    nomeOrData: string | RegisterRequestDTO,
+    email?: string,
+    senha?: string,
+    perfil?: PerfilUsuario
+  ) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -38,11 +55,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         ]);
 
         if (storedToken[1] && storedUser[1]) {
+          const parsedUser: Usuario = JSON.parse(storedUser[1]);
+          setAxiosAuthToken(storedToken[1]);
           setToken(storedToken[1]);
-          setUser(JSON.parse(storedUser[1]));
+          setUser(parsedUser);
+        } else {
+          setAxiosAuthToken(null);
         }
       } catch {
-        // Ignora falha de leitura inicial
+        setAxiosAuthToken(null);
       } finally {
         setLoading(false);
       }
@@ -51,30 +72,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     loadStorageData();
   }, []);
 
-  const signIn = useCallback(async (credentials: LoginRequestDTO) => {
-    const response = await authService.login(credentials);
-    setToken(response.token);
-    setUser(response.usuario);
+  const signIn = useCallback(
+    async (
+      emailOrCredentials: string | LoginRequestDTO,
+      senhaParam?: string
+    ) => {
+      const credentials: LoginRequestDTO =
+        typeof emailOrCredentials === 'string'
+          ? { email: emailOrCredentials, senha: senhaParam || '' }
+          : emailOrCredentials;
 
-    await AsyncStorage.multiSet([
-      [STORAGE_KEYS.TOKEN, response.token],
-      [STORAGE_KEYS.USER, JSON.stringify(response.usuario)],
-    ]);
-  }, []);
+      const response = await authService.login(credentials);
+
+      setAxiosAuthToken(response.token);
+      setToken(response.token);
+      setUser(response.usuario);
+
+      await AsyncStorage.multiSet([
+        [STORAGE_KEYS.TOKEN, response.token],
+        [STORAGE_KEYS.USER, JSON.stringify(response.usuario)],
+      ]);
+    },
+    []
+  );
 
   const signUp = useCallback(
-    async (data: RegisterRequestDTO) => {
-      await authService.registrar(data);
-      // Autentica automaticamente após o cadastro para fluidez da UX
-      await signIn({ email: data.email, senha: data.senha });
+    async (
+      nomeOrData: string | RegisterRequestDTO,
+      emailParam?: string,
+      senhaParam?: string,
+      perfilParam: PerfilUsuario = 'ROLE_CIDADAO'
+    ) => {
+      const registerDto: RegisterRequestDTO =
+        typeof nomeOrData === 'string'
+          ? {
+              nome: nomeOrData,
+              email: emailParam || '',
+              senha: senhaParam || '',
+              perfil: perfilParam,
+            }
+          : {
+              ...nomeOrData,
+              perfil: nomeOrData.perfil || 'ROLE_CIDADAO',
+            };
+
+      await authService.registrar(registerDto);
+      await signIn(registerDto.email, registerDto.senha);
     },
     [signIn]
   );
 
   const signOut = useCallback(async () => {
+    setAxiosAuthToken(null);
     await AsyncStorage.multiRemove([STORAGE_KEYS.TOKEN, STORAGE_KEYS.USER]);
     setToken(null);
     setUser(null);
+  }, []);
+
+  useEffect(() => {
+    registerUnauthorizedHandler(() => {
+      setToken(null);
+      setUser(null);
+    });
+    return () => {
+      registerUnauthorizedHandler(null);
+    };
   }, []);
 
   return (

@@ -22,10 +22,11 @@ export const CustomInput: React.FC<CustomInputProps> = ({
   icon,
   error,
   isPassword = false,
+  editable = true,
   style,
   ...rest
 }) => {
-  const [focused, setFocused] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const [hidePassword, setHidePassword] = useState(isPassword);
 
   return (
@@ -34,8 +35,9 @@ export const CustomInput: React.FC<CustomInputProps> = ({
       <View
         style={[
           styles.inputContainer,
-          focused && styles.inputFocused,
+          isFocused && styles.inputFocused,
           !!error && styles.inputError,
+          !editable && styles.inputDisabled,
           rest.multiline && styles.multilineContainer,
         ]}
       >
@@ -46,7 +48,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
             color={
               error
                 ? colors.danger
-                : focused
+                : isFocused
                 ? colors.primary
                 : colors.textSecondary
             }
@@ -60,16 +62,18 @@ export const CustomInput: React.FC<CustomInputProps> = ({
             rest.multiline && styles.multilineInput,
             style,
           ]}
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor="#A1A1AA"
           secureTextEntry={hidePassword}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          editable={editable}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           selectionColor={colors.primary}
           {...rest}
         />
 
         {isPassword && (
           <TouchableOpacity
+            disabled={!editable}
             onPress={() => setHidePassword((prev) => !prev)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
@@ -97,7 +101,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   label: {
-    color: colors.textPrimary,
+    color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
     marginBottom: spacing.xs + 2,
@@ -106,9 +110,9 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: '#1E1E1E',
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     minHeight: 50,
@@ -119,18 +123,21 @@ const styles = StyleSheet.create({
     minHeight: 104,
   },
   inputFocused: {
-    borderColor: colors.primary,
+    borderColor: '#00E676',
     backgroundColor: colors.surfaceElevated,
   },
   inputError: {
-    borderColor: colors.danger,
+    borderColor: '#EF4444',
+  },
+  inputDisabled: {
+    opacity: 0.65,
   },
   leftIcon: {
     marginRight: spacing.sm + 2,
   },
   input: {
     flex: 1,
-    color: colors.textPrimary,
+    color: '#FFFFFF',
     fontSize: 15,
     paddingVertical: spacing.sm,
   },
@@ -145,7 +152,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   errorText: {
-    color: colors.danger,
+    color: '#EF4444',
     fontSize: 12,
     fontWeight: '500',
   },

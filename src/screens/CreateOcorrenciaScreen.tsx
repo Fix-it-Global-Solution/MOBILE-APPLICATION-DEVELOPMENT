@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,11 +13,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { Camera, CameraView } from 'expo-camera';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { CustomInput } from '../components/CustomInput';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { useAuth } from '../context/AuthContext';
 import { useOcorrencias } from '../context/OcorrenciaContext';
 import { CATEGORIAS_META, CRITICIDADE_META } from '../services/mockData';
 import { colors, radius, spacing, typography } from '../styles/theme';
@@ -44,6 +47,7 @@ const SAMPLE_PHOTOS: Record<CategoriaOcorrencia, string> = {
 };
 
 export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
+  const { signOut } = useAuth();
   const { criarOcorrencia } = useOcorrencias();
 
   const [titulo, setTitulo] = useState('');
@@ -54,30 +58,35 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
   const [enderecoReferencia, setEnderecoReferencia] = useState(
     'Av. Paulista, 1106 - Bela Vista, São Paulo - SP'
   );
-  const [latitude, setLatitude] = useState<number>(-23.5641);
-  const [longitude, setLongitude] = useState<number>(-46.6524);
+  const [latitude, setLatitude] = useState<number>(-23.56412);
+  const [longitude, setLongitude] = useState<number>(-46.65239);
   const [fotoUri, setFotoUri] = useState<string>('');
   const [loadingGps, setLoadingGps] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successBanner, setSuccessBanner] = useState('');
 
+  const [cameraModalVisible, setCameraModalVisible] = useState(false);
+  const cameraRef = useRef<CameraView | null>(null);
+
   const handleSelectCategoria = (cat: CategoriaOcorrencia) => {
     setCategoria(cat);
     setCriticidade(CATEGORIAS_META[cat].defaultCriticidade);
   };
 
-  const handleCapturarGps = async () => {
+  const handleCapturarGps = useCallback(async (isInitialMount = false) => {
     setLoadingGps(true);
-    setErrorMessage('');
+    if (!isInitialMount) {
+      setErrorMessage('');
+    }
+
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
+
       if (status !== 'granted') {
-        // Fallback para coordenadas da FIAP / Av. Paulista em simuladores sem GPS
-        setLatitude(-23.56412);
-        setLongitude(-46.65239);
-        setEnderecoReferencia(
-          'Av. Paulista, 1106 (Próximo à FIAP) - Bela Vista, SP'
+        Alert.alert(
+          'Permissão de Localização Negada',
+          'O Fix-It precisa de acesso ao GPS para registrar a localização exata da anomalia viária. Habilite a permissão de localização nas configurações do seu dispositivo.'
         );
         return;
       }
@@ -85,53 +94,91 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
+
       setLatitude(location.coords.latitude);
       setLongitude(location.coords.longitude);
 
-      const reverse = await Location.reverseGeocodeAsync({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
+      try {
+        const reverse = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
 
-      if (reverse && reverse.length > 0) {
-        const addr = reverse[0];
-        const formatted = [
-          addr.street,
-          addr.streetNumber,
-          addr.district || addr.subregion,
-          addr.city,
-        ]
-          .filter(Boolean)
-          .join(', ');
-        if (formatted) {
-          setEnderecoReferencia(formatted);
+        if (reverse && reverse.length > 0) {
+          const addr = reverse[0];
+          const formatted = [
+            addr.street,
+            addr.streetNumber,
+            addr.district || addr.subregion,
+            addr.city,
+          ]
+            .filter(Boolean)
+            .join(', ');
+          if (formatted) {
+            setEnderecoReferencia(formatted);
+          }
         }
-      }
+      } catch {}
     } catch {
-      setLatitude(-23.5614);
-      setLongitude(-46.6558);
-      setEnderecoReferencia('Av. Paulista, 1578 - Bela Vista, São Paulo - SP');
+      if (!isInitialMount) {
+        Alert.alert(
+          'Aviso de GPS',
+          'Não foi possível obter o sinal de satélite no momento. As coordenadas de contingência foram mantidas.'
+        );
+      }
     } finally {
       setLoadingGps(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    handleCapturarGps(true);
+  }, [handleCapturarGps]);
 
   const handleTirarFotoCamera = async () => {
     try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        setFotoUri(SAMPLE_PHOTOS[categoria]);
+      const cameraPerm = await Camera.requestCameraPermissionsAsync();
+      const pickerPerm = await ImagePicker.requestCameraPermissionsAsync();
+
+      if (cameraPerm.status !== 'granted' && !pickerPerm.granted) {
+        Alert.alert(
+          'Permissão de Câmera Negada',
+          'Para fotografar a anomalia viária, habilite a permissão de acesso à câmera nas configurações do sistema.'
+        );
         return;
       }
+
       const result = await ImagePicker.launchCameraAsync({
         quality: 0.7,
         allowsEditing: true,
+        base64: true,
       });
+
       if (!result.canceled && result.assets[0]?.uri) {
         setFotoUri(result.assets[0].uri);
       }
     } catch {
+      setCameraModalVisible(true);
+    }
+  };
+
+  const handleCapturarPeloVisorExpoCamera = async () => {
+    try {
+      if (cameraRef.current) {
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.7,
+        });
+        if (photo?.uri) {
+          setFotoUri(photo.uri);
+          setCameraModalVisible(false);
+          return;
+        }
+      }
       setFotoUri(SAMPLE_PHOTOS[categoria]);
+      setCameraModalVisible(false);
+    } catch {
+      setFotoUri(SAMPLE_PHOTOS[categoria]);
+      setCameraModalVisible(false);
     }
   };
 
@@ -140,19 +187,27 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
       const permission =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        setFotoUri(SAMPLE_PHOTOS[categoria]);
+        Alert.alert(
+          'Permissão de Galeria Negada',
+          'Para anexar fotos da sua biblioteca, habilite a permissão de acesso às fotos nas configurações do sistema.'
+        );
         return;
       }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         quality: 0.7,
         allowsEditing: true,
       });
+
       if (!result.canceled && result.assets[0]?.uri) {
         setFotoUri(result.assets[0].uri);
       }
     } catch {
-      setFotoUri(SAMPLE_PHOTOS[categoria]);
+      Alert.alert(
+        'Erro ao Abrir Galeria',
+        'Não foi possível acessar a galeria de imagens do dispositivo.'
+      );
     }
   };
 
@@ -205,6 +260,10 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
           `Protocolo: ${criada.protocoloOs}\nEncaminhado via RabbitMQ para: ${criada.secretariaRecomendada}`,
           [
             {
+              text: 'Ir para o Painel (Dashboard)',
+              onPress: () => navigation.navigate('Dashboard'),
+            },
+            {
               text: 'Ver Meus Chamados',
               onPress: () => navigation.navigate('MyOcorrencias'),
             },
@@ -212,13 +271,15 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
         );
       } else {
         setTimeout(() => {
-          navigation.navigate('MyOcorrencias');
+          navigation.navigate('Dashboard');
         }, 900);
       }
     } catch (err: any) {
-      setErrorMessage(
-        err?.message || 'Não foi possível registrar o chamado. Tente novamente.'
-      );
+      const apiMsg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Não foi possível registrar o chamado (verifique os campos obrigatórios).';
+      setErrorMessage(apiMsg);
     } finally {
       setSubmitting(false);
     }
@@ -235,22 +296,36 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Cabeçalho */}
           <View style={styles.headerBlock}>
-            <View style={styles.aiBadge}>
-              <Ionicons
-                name="sparkles-outline"
-                size={13}
-                color={colors.primary}
-              />
-              <Text style={styles.aiBadgeText}>
-                TRIAGEM AUTOMÁTICA SPRING AI + RABBITMQ
-              </Text>
+            <View style={styles.headerTopRow}>
+              <View style={styles.aiBadge}>
+                <Ionicons
+                  name="sparkles-outline"
+                  size={13}
+                  color={colors.primary}
+                />
+                <Text style={styles.aiBadgeText}>
+                  TRIAGEM AUTOMÁTICA SPRING AI + RABBITMQ
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.logoutHeaderBtn}
+                onPress={signOut}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="log-out-outline"
+                  size={16}
+                  color={colors.danger}
+                />
+                <Text style={styles.logoutHeaderText}>Sair</Text>
+              </TouchableOpacity>
             </View>
             <Text style={styles.title}>Abrir Nova Ocorrência</Text>
             <Text style={styles.subtitle}>
-              Registre um problema urbano com geolocalização e foto. Nossa IA
-              classifica a gravidade e aciona a secretaria responsável.
+              Registre um problema urbano com geolocalização GPS e foto. Nossa
+              IA classifica a gravidade e aciona a secretaria responsável.
             </Text>
           </View>
 
@@ -276,7 +351,6 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
             </View>
           )}
 
-          {/* 1. Seletor de Categoria */}
           <Text style={styles.sectionLabel}>1. Categoria do Incidente</Text>
           <View style={styles.categoryGrid}>
             {(Object.keys(CATEGORIAS_META) as CategoriaOcorrencia[]).map(
@@ -313,7 +387,6 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
             )}
           </View>
 
-          {/* 2. Nível de Criticidade Percebida */}
           <Text style={styles.sectionLabel}>2. Grau de Criticidade / Risco</Text>
           <View style={styles.criticidadeRow}>
             {(
@@ -349,13 +422,13 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
             })}
           </View>
 
-          {/* 3. Título e Descrição */}
           <View style={styles.formSection}>
             <CustomInput
               label="3. Título Resumido da Ocorrência"
               placeholder="Ex.: Cratera na faixa direita da Av. Paulista"
               icon="document-text-outline"
               maxLength={100}
+              editable={!submitting}
               value={titulo}
               onChangeText={setTitulo}
             />
@@ -367,27 +440,50 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
               multiline
               numberOfLines={4}
               maxLength={1000}
+              editable={!submitting}
               value={descricao}
               onChangeText={setDescricao}
             />
           </View>
 
-          {/* 5. Geolocalização GPS */}
           <View style={styles.geoCard}>
             <View style={styles.geoHeader}>
               <View style={styles.geoTitleRow}>
                 <Ionicons name="location" size={18} color={colors.accent} />
-                <Text style={styles.geoTitle}>5. Geolocalização Precisa</Text>
+                <Text style={styles.geoTitle}>
+                  5. Coordenadas GPS (Somente Leitura)
+                </Text>
               </View>
-              <Text style={styles.coordsBadge}>
-                {latitude.toFixed(5)}, {longitude.toFixed(5)}
-              </Text>
+              <View style={styles.gpsActivePill}>
+                <View style={styles.gpsDot} />
+                <Text style={styles.gpsActiveText}>GPS Ativo</Text>
+              </View>
+            </View>
+
+            <View style={styles.coordsReadOnlyRow}>
+              <View style={{ flex: 1 }}>
+                <CustomInput
+                  label="Latitude"
+                  icon="compass-outline"
+                  value={latitude.toFixed(6)}
+                  editable={false}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <CustomInput
+                  label="Longitude"
+                  icon="navigate-outline"
+                  value={longitude.toFixed(6)}
+                  editable={false}
+                />
+              </View>
             </View>
 
             <CustomInput
-              label="Endereço de Referência"
+              label="Endereço / Ponto de Referência"
               placeholder="Rua, número e bairro"
               icon="map-outline"
+              editable={!submitting}
               value={enderecoReferencia}
               onChangeText={setEnderecoReferencia}
             />
@@ -396,38 +492,50 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
               title={
                 loadingGps
                   ? 'Obtendo satélites GPS...'
-                  : 'Atualizar Coordenadas pelo GPS Atual'
+                  : 'Obter Localização Atual (GPS)'
               }
               variant="secondary"
               icon="locate-outline"
               loading={loadingGps}
-              onPress={handleCapturarGps}
+              disabled={loadingGps || submitting}
+              onPress={() => handleCapturarGps(false)}
             />
           </View>
 
-          {/* 6. Evidência Fotográfica */}
           <View style={styles.photoCard}>
             <View style={styles.geoTitleRow}>
               <Ionicons name="camera" size={18} color={colors.primary} />
               <Text style={styles.geoTitle}>
-                6. Foto do Incidente (Visão Computacional IA)
+                6. Captura de Imagem (Câmera / Galeria)
               </Text>
             </View>
             <Text style={styles.photoHint}>
-              Fotografe o problema urbano para que o modelo Gemini 1.5 Flash
+              Fotografe a anomalia viária para que o modelo Gemini 1.5 Flash
               valide a severidade e gere o parecer técnico.
             </Text>
 
             {fotoUri ? (
               <View style={styles.previewBox}>
                 <Image source={{ uri: fotoUri }} style={styles.previewImage} />
-                <TouchableOpacity
-                  style={styles.removePhotoBtn}
-                  onPress={() => setFotoUri('')}
-                >
-                  <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
-                  <Text style={styles.removePhotoText}>Remover Foto</Text>
-                </TouchableOpacity>
+                <View style={styles.previewMetaBar}>
+                  <View style={styles.previewBadge}>
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={14}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.previewBadgeText}>
+                      Miniatura da Foto Anexada
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.removePhotoBtn}
+                    onPress={() => setFotoUri('')}
+                  >
+                    <Ionicons name="trash-outline" size={15} color="#FFFFFF" />
+                    <Text style={styles.removePhotoText}>Trocar Foto</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
               <View style={styles.photoActionsRow}>
@@ -440,7 +548,7 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
                     size={22}
                     color={colors.primary}
                   />
-                  <Text style={styles.photoBtnText}>Câmera</Text>
+                  <Text style={styles.photoBtnText}>Abrir Câmera</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -470,15 +578,55 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
             )}
           </View>
 
-          {/* Botão de Envio */}
           <PrimaryButton
             title="Transmitir Chamado para Zeladoria"
             icon="paper-plane-outline"
             loading={submitting}
+            disabled={submitting}
             onPress={handleSubmit}
             style={{ marginTop: spacing.md }}
           />
         </ScrollView>
+
+        <Modal
+          visible={cameraModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setCameraModalVisible(false)}
+        >
+          <View style={styles.cameraModalOverlay}>
+            <View style={styles.cameraModalCard}>
+              <View style={styles.cameraModalHeader}>
+                <Text style={styles.cameraModalTitle}>
+                  Câmera Fix-It (Visor de Inspeção)
+                </Text>
+                <TouchableOpacity onPress={() => setCameraModalVisible(false)}>
+                  <Ionicons
+                    name="close-circle"
+                    size={26}
+                    color={colors.textPrimary}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.cameraViewWrapper}>
+                <CameraView
+                  ref={cameraRef}
+                  style={styles.cameraView}
+                  facing="back"
+                />
+              </View>
+
+              <View style={styles.cameraModalActions}>
+                <PrimaryButton
+                  title="Capturar Foto da Ocorrência"
+                  icon="camera"
+                  onPress={handleCapturarPeloVisorExpoCamera}
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -487,7 +635,7 @@ export const CreateOcorrenciaScreen: React.FC<Props> = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#121212',
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
@@ -496,6 +644,12 @@ const styles = StyleSheet.create({
   },
   headerBlock: {
     marginBottom: spacing.lg,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
   },
   aiBadge: {
     flexDirection: 'row',
@@ -506,7 +660,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: 4,
     borderRadius: radius.full,
-    marginBottom: spacing.sm,
+  },
+  logoutHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.dangerMuted,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  logoutHeaderText: {
+    color: colors.danger,
+    fontSize: 11,
+    fontWeight: '700',
   },
   aiBadgeText: {
     color: colors.primary,
@@ -570,10 +739,10 @@ const styles = StyleSheet.create({
   categoryCard: {
     width: '31%',
     minHeight: 78,
-    backgroundColor: colors.surface,
+    backgroundColor: '#1E1E1E',
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
     padding: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
@@ -606,9 +775,9 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    backgroundColor: '#1E1E1E',
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
   },
   criticidadeDot: {
     width: 8,
@@ -624,11 +793,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   geoCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#1E1E1E',
     borderRadius: radius.lg,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
     marginBottom: spacing.lg,
   },
   geoHeader: {
@@ -647,19 +816,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  coordsBadge: {
-    ...typography.mono,
+  gpsActivePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: colors.accentMuted,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  gpsDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
+  gpsActiveText: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  coordsReadOnlyRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
   photoCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#1E1E1E',
     borderRadius: radius.lg,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
     marginBottom: spacing.md,
   },
   photoHint: {
@@ -675,10 +861,10 @@ const styles = StyleSheet.create({
   },
   photoBtn: {
     flex: 1,
-    backgroundColor: colors.backgroundSecondary,
+    backgroundColor: '#121212',
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: '#333333',
     paddingVertical: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -692,17 +878,32 @@ const styles = StyleSheet.create({
   previewBox: {
     borderRadius: radius.md,
     overflow: 'hidden',
-    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#333333',
+    backgroundColor: '#121212',
   },
   previewImage: {
     width: '100%',
-    height: 170,
-    borderRadius: radius.md,
+    height: 175,
+  },
+  previewMetaBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  previewBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  previewBadgeText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   removePhotoBtn: {
-    position: 'absolute',
-    bottom: 10,
-    right: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
@@ -715,5 +916,40 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+  },
+  cameraModalOverlay: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  cameraModalCard: {
+    backgroundColor: '#1E1E1E',
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  cameraModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  cameraModalTitle: {
+    ...typography.h3,
+  },
+  cameraViewWrapper: {
+    height: 320,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: '#000000',
+    marginBottom: spacing.md,
+  },
+  cameraView: {
+    flex: 1,
+  },
+  cameraModalActions: {
+    marginTop: spacing.xs,
   },
 });

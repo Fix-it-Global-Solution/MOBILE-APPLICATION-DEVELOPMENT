@@ -1,49 +1,40 @@
 import { DarkTheme, Theme as NavigationTheme } from '@react-navigation/native';
 
-/**
- * Fix-It | Tema Escuro Oficial (Dark OLED / CitizenTech Minimalist)
- * Projetado para harmonizar com a logo oficial preta minimalista da plataforma.
- */
 export const colors = {
-  // Fundos principais (OLED & Charcoal)
-  background: '#0A0A0A',         // Preto OLED profundo (combina 100% com o fundo da logo)
-  backgroundSecondary: '#121212', // Preto carvão para áreas secundárias
-  surface: '#1E1E1E',            // Cards e superfícies primárias
-  surfaceElevated: '#252525',    // Modais, inputs focados e superfícies destacadas
-  surfaceBorder: '#2E2E32',      // Bordas sutis de cards e divisores
+  background: '#0A0A0A',
+  backgroundSecondary: '#121212',
+  surface: '#1E1E1E',
+  surfaceElevated: '#252525',
+  surfaceBorder: '#333333',
+  inputBorder: '#333333',
 
-  // Cores de marca e destaque
-  primary: '#00E676',            // Verde Esmeralda moderno (Ações principais, IA ativa e concluído)
+  primary: '#00E676',
   primaryDark: '#00C853',
   primaryMuted: 'rgba(0, 230, 118, 0.14)',
 
-  accent: '#38BDF8',             // Azul Ciano moderno (Geolocalização, links, triagem IA)
+  accent: '#38BDF8',
   accentMuted: 'rgba(56, 189, 248, 0.14)',
 
-  // Textos
-  textPrimary: '#FFFFFF',        // Branco puro para títulos e leitura principal
-  textSecondary: '#A1A1AA',      // Cinza claro (Zinc 400) para subtítulos e descrições
-  textMuted: '#71717A',          // Cinza intermediário para placeholders e metadados
-  textInverse: '#0A0A0A',        // Texto escuro sobre botões primários (#00E676)
+  textPrimary: '#FFFFFF',
+  textSecondary: '#A1A1AA',
+  textMuted: '#71717A',
+  textInverse: '#0A0A0A',
 
-  // Cores semânticas e de Criticidade Urbana (Mapa & Dashboard)
   criticidade: {
-    CRITICA: '#EF4444',          // Vermelho Alerta (Risco iminente / Cratera / Fio caído)
-    ALTA: '#F97316',             // Laranja Intenso (Urgência alta)
-    MEDIA: '#F59E0B',            // Âmbar / Amarelo (Atenção moderada)
-    BAIXA: '#38BDF8',            // Azul Ciano (Manutenção preventiva / Baixo impacto)
+    CRITICA: '#EF4444',
+    ALTA: '#F97316',
+    MEDIA: '#F59E0B',
+    BAIXA: '#38BDF8',
   },
 
-  // Cores de Status da Ordem de Serviço / Ocorrência
   status: {
-    ABERTO: '#EF4444',           // Aguardando triagem
-    EM_ANALISE: '#F59E0B',       // Em análise técnica / IA
-    EM_EXECUCAO: '#38BDF8',      // Equipe de campo deslocada
-    CONCLUIDO: '#00E676',        // Ordem de serviço concluída
-    CANCELADO: '#71717A',        // Chamado cancelado pelo cidadão/gestor
+    ABERTO: '#EF4444',
+    EM_ANALISE: '#F59E0B',
+    EM_EXECUCAO: '#38BDF8',
+    CONCLUIDO: '#00E676',
+    CANCELADO: '#71717A',
   },
 
-  // Feedbacks do sistema
   success: '#00E676',
   warning: '#F59E0B',
   danger: '#EF4444',
@@ -68,6 +59,16 @@ export const radius = {
   lg: 16,
   xl: 22,
   full: 9999,
+} as const;
+
+export const shadows = {
+  card: {
+    elevation: 3,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+  },
 } as const;
 
 export const typography = {
@@ -111,9 +112,6 @@ export const typography = {
   },
 };
 
-/**
- * Tema integrado ao React Navigation para evitar qualquer flash branco entre transições de tela
- */
 export const FixItNavigationTheme: NavigationTheme = {
   ...DarkTheme,
   dark: true,
@@ -132,6 +130,7 @@ export const theme = {
   colors,
   spacing,
   radius,
+  shadows,
   typography,
 };
 

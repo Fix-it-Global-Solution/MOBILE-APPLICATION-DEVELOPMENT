@@ -60,6 +60,7 @@ export interface RegisterRequestDTO {
 export interface TokenResponseDTO {
   token: string;
   tipo: string;
+  perfil: PerfilUsuario;
   expiraEm: string;
   usuario: Usuario;
 }
@@ -76,7 +77,6 @@ export interface OcorrenciaRequestDTO {
   usuarioId: number;
 }
 
-// Tipagens de Navegação (6 Telas Obrigatórias)
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
