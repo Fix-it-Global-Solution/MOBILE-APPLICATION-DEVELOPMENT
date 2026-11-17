@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Fix-It | Zeladoria Urbana",
+    "slug": "fix-it-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "backgroundColor": "#0A0A0A",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "br.com.fiap.fixit",
+      "userInterfaceStyle": "dark",
+      "infoPlist": {
+        "NSCameraUsageDescription": "O Fix-It precisa de acesso à câmera para fotografar incidentes urbanos na sua região.",
+        "NSPhotoLibraryUsageDescription": "O Fix-It precisa de acesso à galeria para anexar fotos aos chamados de zeladoria.",
+        "NSLocationWhenInUseUsageDescription": "O Fix-It utiliza sua localização GPS para georreferenciar o incidente urbano com precisão."
+      }
+    },
+    "android": {
+      "package": "br.com.fiap.fixit",
+      "userInterfaceStyle": "dark",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "extra": {
+      "commitHash": "cb5f0a1",
+      "turma": "2TDSPF",
+      "apiUrl": "http://localhost:8080/api/v1"
+    },
+    "plugins": [
+      "expo-status-bar"
+    ]
+  }
+}
