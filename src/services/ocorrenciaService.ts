@@ -6,6 +6,7 @@ import {
   CriticidadeNivel,
   Ocorrencia,
   OcorrenciaRequestDTO,
+  OcorrenciaUpdateDTO,
 } from '../types';
 
 function normalizeApiOcorrencia(raw: any): Ocorrencia {
@@ -117,8 +118,7 @@ export const ocorrenciaService = {
       (item) =>
         item.usuarioId === usuarioId ||
         (autorNome &&
-          item.autorNome.toLowerCase() === autorNome.toLowerCase()) ||
-        item.usuarioId === 1
+          item.autorNome.toLowerCase() === autorNome.toLowerCase())
     );
   },
 
@@ -202,6 +202,91 @@ export const ocorrenciaService = {
     }
   },
 
+  async atualizarOcorrencia(
+    id: number,
+    dto: OcorrenciaUpdateDTO
+  ): Promise<Ocorrencia> {
+    if (!dto.titulo?.trim() || dto.titulo.trim().length < 5) {
+      throw new Error(
+        'O título atualizado deve possuir no mínimo 5 caracteres.'
+      );
+    }
+
+    if (!dto.descricao?.trim() || dto.descricao.trim().length < 10) {
+      throw new Error(
+        'A descrição atualizada deve possuir no mínimo 10 caracteres.'
+      );
+    }
+
+    const current = await getStoredOcorrencias();
+    const existing = current.find((item) => item.id === id);
+
+    if (!existing) {
+      throw new Error('Ocorrência não encontrada para atualização.');
+    }
+
+    const meta = CATEGORIAS_META[dto.categoria];
+    const nowIso = new Date().toISOString();
+
+    const updatedItem: Ocorrencia = {
+      ...existing,
+      titulo: dto.titulo.trim(),
+      descricao: dto.descricao.trim(),
+      categoria: dto.categoria,
+      criticidade: dto.criticidade,
+      enderecoReferencia: dto.enderecoReferencia.trim(),
+      status: dto.status || existing.status,
+      fotoUrl: dto.fotoUrl ?? existing.fotoUrl,
+      dataAtualizacao: nowIso,
+      secretariaRecomendada: meta.secretaria,
+      parecerIa: `Reavaliação Spring AI (Gemini 1.5 Flash): Chamado atualizado como "${meta.label}" com criticidade ${dto.criticidade}. Ordem de serviço sincronizada com ${meta.secretaria}.`,
+    };
+
+    try {
+      const response = await api.put(`/ocorrencias/${id}`, {
+        titulo: updatedItem.titulo,
+        descricao: updatedItem.descricao,
+        categoria: updatedItem.categoria,
+        criticidade: updatedItem.criticidade,
+        latitude: updatedItem.latitude,
+        longitude: updatedItem.longitude,
+        enderecoReferencia: updatedItem.enderecoReferencia,
+        status: updatedItem.status,
+        fotoUrl: updatedItem.fotoUrl,
+        usuarioId: updatedItem.usuarioId,
+      });
+
+      const normalized = normalizeApiOcorrencia({
+        ...updatedItem,
+        ...response.data,
+        id,
+        categoria: updatedItem.categoria,
+        criticidade: updatedItem.criticidade,
+        status: updatedItem.status,
+        dataAtualizacao: nowIso,
+      });
+
+      const listWithApiUpdate = current.map((item) =>
+        item.id === id ? normalized : item
+      );
+      await saveStoredOcorrencias(listWithApiUpdate);
+      return normalized;
+    } catch (error: any) {
+      if (error?.response?.status === 400) {
+        const apiValidationMsg =
+          error?.response?.data?.message ||
+          'Erro de validação (400 Bad Request) ao atualizar a ocorrência.';
+        throw new Error(apiValidationMsg);
+      }
+
+      const listUpdatedLocally = current.map((item) =>
+        item.id === id ? updatedItem : item
+      );
+      await saveStoredOcorrencias(listUpdatedLocally);
+      return updatedItem;
+    }
+  },
+
   async cancelarOcorrencia(id: number): Promise<void> {
     const current = await getStoredOcorrencias();
     const target = current.find((item) => item.id === id);
@@ -236,6 +321,13 @@ export const ocorrenciaService = {
     autorNome = 'Munícipe Fix-It'
   ): Promise<Ocorrencia> {
     return this.criarOcorrencia(dto, autorNome);
+  },
+
+  async atualizar(
+    id: number,
+    dto: OcorrenciaUpdateDTO
+  ): Promise<Ocorrencia> {
+    return this.atualizarOcorrencia(id, dto);
   },
 
   async excluir(id: number): Promise<void> {

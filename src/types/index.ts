@@ -77,6 +77,16 @@ export interface OcorrenciaRequestDTO {
   usuarioId: number;
 }
 
+export interface OcorrenciaUpdateDTO {
+  titulo: string;
+  descricao: string;
+  categoria: CategoriaOcorrencia;
+  criticidade: CriticidadeNivel;
+  enderecoReferencia: string;
+  status?: StatusOcorrencia;
+  fotoUrl?: string;
+}
+
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;

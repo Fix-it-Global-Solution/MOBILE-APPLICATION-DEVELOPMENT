@@ -3,6 +3,7 @@ import {
   Alert,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -15,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { CustomInput } from '../components/CustomInput';
 import { OcorrenciaCard } from '../components/OcorrenciaCard';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { useAuth } from '../context/AuthContext';
@@ -25,19 +27,31 @@ import {
   STATUS_META,
 } from '../services/mockData';
 import { colors, radius, spacing, typography } from '../styles/theme';
-import { MainTabParamList, Ocorrencia } from '../types';
+import {
+  CategoriaOcorrencia,
+  CriticidadeNivel,
+  MainTabParamList,
+  Ocorrencia,
+  StatusOcorrencia,
+} from '../types';
 
 type Props = BottomTabScreenProps<MainTabParamList, 'MyOcorrencias'>;
+type EscopoGestor = 'TODAS_OS' | 'MEUS_REGISTROS';
 
 export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
+  const isGestor = user?.perfil === 'ROLE_GESTOR';
+
   const {
+    ocorrencias,
     minhasOcorrencias,
     loading,
     refreshOcorrencias,
+    atualizarOcorrencia,
     cancelarOcorrencia,
   } = useOcorrencias();
 
+  const [escopoGestor, setEscopoGestor] = useState<EscopoGestor>('TODAS_OS');
   const [busca, setBusca] = useState('');
   const [detalheSelecionado, setDetalheSelecionado] =
     useState<Ocorrencia | null>(null);
@@ -45,20 +59,109 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
     useState<Ocorrencia | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [successFeedback, setSuccessFeedback] = useState('');
+
+  const [editItem, setEditItem] = useState<Ocorrencia | null>(null);
+  const [editTitulo, setEditTitulo] = useState('');
+  const [editDescricao, setEditDescricao] = useState('');
+  const [editCategoria, setEditCategoria] =
+    useState<CategoriaOcorrencia>('ASFALTO_BURACO');
+  const [editCriticidade, setEditCriticidade] =
+    useState<CriticidadeNivel>('CRITICA');
+  const [editEndereco, setEditEndereco] = useState('');
+  const [editStatus, setEditStatus] = useState<StatusOcorrencia>('ABERTO');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  const baseList = useMemo(() => {
+    if (!isGestor) {
+      return minhasOcorrencias;
+    }
+    return escopoGestor === 'TODAS_OS' ? ocorrencias : minhasOcorrencias;
+  }, [isGestor, escopoGestor, ocorrencias, minhasOcorrencias]);
 
   const listaFiltrada = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    if (!termo) return minhasOcorrencias;
-    return minhasOcorrencias.filter(
+    if (!termo) return baseList;
+    return baseList.filter(
       (item) =>
         item.titulo.toLowerCase().includes(termo) ||
         item.enderecoReferencia.toLowerCase().includes(termo) ||
+        item.autorNome.toLowerCase().includes(termo) ||
         (item.protocoloOs || '').toLowerCase().includes(termo)
     );
-  }, [minhasOcorrencias, busca]);
+  }, [baseList, busca]);
+
+  const handleOpenEditModal = (item: Ocorrencia) => {
+    setActionError('');
+    setSuccessFeedback('');
+    setEditError('');
+    setEditItem(item);
+    setEditTitulo(item.titulo);
+    setEditDescricao(item.descricao);
+    setEditCategoria(item.categoria);
+    setEditCriticidade(item.criticidade);
+    setEditEndereco(item.enderecoReferencia);
+    setEditStatus(item.status);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editItem) return;
+    setEditError('');
+
+    if (!editTitulo.trim() || editTitulo.trim().length < 5) {
+      setEditError('Informe um título com no mínimo 5 caracteres.');
+      return;
+    }
+
+    if (!editDescricao.trim() || editDescricao.trim().length < 10) {
+      setEditError('Informe uma descrição com no mínimo 10 caracteres.');
+      return;
+    }
+
+    if (!editEndereco.trim()) {
+      setEditError('Informe o endereço ou ponto de referência.');
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const atualizada = await atualizarOcorrencia(editItem.id, {
+        titulo: editTitulo,
+        descricao: editDescricao,
+        categoria: editCategoria,
+        criticidade: editCriticidade,
+        enderecoReferencia: editEndereco,
+        status: isGestor ? editStatus : editItem.status,
+      });
+
+      if (detalheSelecionado?.id === atualizada.id) {
+        setDetalheSelecionado(atualizada);
+      }
+
+      setEditItem(null);
+      setSuccessFeedback(
+        `Ocorrência #${atualizada.protocoloOs} atualizada com sucesso!`
+      );
+
+      if (Platform.OS !== 'web') {
+        Alert.alert(
+          'Ocorrência Atualizada!',
+          `Os dados do chamado #${atualizada.protocoloOs} foram atualizados e sincronizados.`
+        );
+      }
+    } catch (err: any) {
+      setEditError(
+        err?.message || 'Não foi possível salvar as alterações da ocorrência.'
+      );
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const requestCancelOcorrencia = (item: Ocorrencia) => {
     setActionError('');
+    setSuccessFeedback('');
     if (item.status !== 'ABERTO') {
       const msg =
         'Apenas ocorrências com status "ABERTO" podem ser canceladas.';
@@ -85,6 +188,9 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
                 if (detalheSelecionado?.id === item.id) {
                   setDetalheSelecionado(null);
                 }
+                setSuccessFeedback(
+                  `Chamado #${item.protocoloOs} cancelado e removido.`
+                );
               } catch (err: any) {
                 setActionError(
                   err?.message || 'Não foi possível cancelar a ocorrência.'
@@ -110,6 +216,9 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
       if (detalheSelecionado?.id === confirmDeleteItem.id) {
         setDetalheSelecionado(null);
       }
+      setSuccessFeedback(
+        `Chamado #${confirmDeleteItem.protocoloOs} cancelado e removido.`
+      );
       setConfirmDeleteItem(null);
     } catch (err: any) {
       setActionError(
@@ -125,14 +234,33 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
       <View style={styles.container}>
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Meus Chamados</Text>
+            <Text style={styles.title}>
+              {isGestor ? 'Gestão de Chamados' : 'Meus Chamados'}
+            </Text>
             <Text style={styles.subtitle}>
-              Acompanhe o parecer da IA ou cancele solicitações abertas
+              {isGestor
+                ? 'Gerencie todas as Ordens de Serviço dos munícipes ou seus próprios registros'
+                : 'Acompanhe o parecer da IA, edite os dados ou cancele suas solicitações'}
             </Text>
           </View>
           <View style={styles.headerRightActions}>
-            <View style={styles.countBadge}>
-              <Text style={styles.countText}>{minhasOcorrencias.length}</Text>
+            <View
+              style={[
+                styles.countBadge,
+                isGestor && {
+                  backgroundColor: colors.accentMuted,
+                  borderColor: colors.accent,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.countText,
+                  isGestor && { color: colors.accent },
+                ]}
+              >
+                {baseList.length}
+              </Text>
             </View>
             <TouchableOpacity
               style={styles.logoutHeaderBtn}
@@ -149,6 +277,65 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         </View>
 
+        {isGestor && (
+          <View style={styles.gestorSwitchRow}>
+            <TouchableOpacity
+              style={[
+                styles.gestorSwitchBtn,
+                escopoGestor === 'TODAS_OS' && styles.gestorSwitchBtnActive,
+              ]}
+              onPress={() => setEscopoGestor('TODAS_OS')}
+            >
+              <Ionicons
+                name="briefcase-outline"
+                size={14}
+                color={
+                  escopoGestor === 'TODAS_OS'
+                    ? colors.textInverse
+                    : colors.textSecondary
+                }
+              />
+              <Text
+                style={[
+                  styles.gestorSwitchText,
+                  escopoGestor === 'TODAS_OS' &&
+                    styles.gestorSwitchTextActive,
+                ]}
+              >
+                Todas as OS da Cidade ({ocorrencias.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.gestorSwitchBtn,
+                escopoGestor === 'MEUS_REGISTROS' &&
+                  styles.gestorSwitchBtnActive,
+              ]}
+              onPress={() => setEscopoGestor('MEUS_REGISTROS')}
+            >
+              <Ionicons
+                name="person-outline"
+                size={14}
+                color={
+                  escopoGestor === 'MEUS_REGISTROS'
+                    ? colors.textInverse
+                    : colors.textSecondary
+                }
+              />
+              <Text
+                style={[
+                  styles.gestorSwitchText,
+                  escopoGestor === 'MEUS_REGISTROS' &&
+                    styles.gestorSwitchTextActive,
+                ]}
+              >
+                Abertos por Mim ({minhasOcorrencias.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.searchBar}>
           <Ionicons
             name="search-outline"
@@ -157,7 +344,11 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
           />
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar por protocolo, rua ou título..."
+            placeholder={
+              isGestor
+                ? 'Buscar por protocolo, solicitante, rua ou título...'
+                : 'Buscar nos meus chamados por protocolo ou rua...'
+            }
             placeholderTextColor={colors.textMuted}
             value={busca}
             onChangeText={setBusca}
@@ -184,6 +375,17 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         )}
 
+        {!!successFeedback && (
+          <View style={styles.successBanner}>
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={18}
+              color={colors.primary}
+            />
+            <Text style={styles.successBannerText}>{successFeedback}</Text>
+          </View>
+        )}
+
         <FlatList
           data={listaFiltrada}
           keyExtractor={(item) => String(item.id)}
@@ -196,6 +398,7 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
               ocorrencia={item}
               showActions
               onPress={() => setDetalheSelecionado(item)}
+              onEdit={() => handleOpenEditModal(item)}
               onDelete={() => requestCancelOcorrencia(item)}
             />
           )}
@@ -212,8 +415,7 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
                 Nenhuma ocorrência encontrada
               </Text>
               <Text style={styles.emptySubtitle}>
-                Você ainda não possui chamados com este filtro ou não abriu
-                solicitações de zeladoria.
+                Você ainda não possui chamados registrados neste filtro.
               </Text>
               <PrimaryButton
                 title="Abrir Novo Chamado Agora"
@@ -236,7 +438,7 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
               {detalheSelecionado && (
                 <ScrollView showsVerticalScrollIndicator={false}>
                   <View style={styles.modalHeader}>
-                    <View>
+                    <View style={{ flex: 1 }}>
                       <Text style={styles.modalProtocol}>
                         ORDEM DE SERVIÇO #{detalheSelecionado.protocoloOs}
                       </Text>
@@ -306,6 +508,15 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
 
                   <View style={styles.detailBlock}>
                     <Text style={styles.detailSectionTitle}>
+                      Solicitante do Chamado
+                    </Text>
+                    <Text style={styles.detailText}>
+                      {detalheSelecionado.autorNome} (ID #{detalheSelecionado.usuarioId})
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailBlock}>
+                    <Text style={styles.detailSectionTitle}>
                       Categoria & Secretaria Designada
                     </Text>
                     <Text style={styles.detailText}>
@@ -316,7 +527,7 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
 
                   <View style={styles.detailBlock}>
                     <Text style={styles.detailSectionTitle}>
-                      Descrição do Munícipe
+                      Descrição do Incidente
                     </Text>
                     <Text style={styles.detailText}>
                       {detalheSelecionado.descricao}
@@ -355,6 +566,21 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
                   )}
 
                   <View style={styles.modalActions}>
+                    <PrimaryButton
+                      title={
+                        isGestor
+                          ? 'Despachar / Editar Ordem de Serviço'
+                          : 'Editar Dados da Minha Ocorrência'
+                      }
+                      variant="primary"
+                      icon="create-outline"
+                      onPress={() => {
+                        const target = detalheSelecionado;
+                        setDetalheSelecionado(null);
+                        handleOpenEditModal(target);
+                      }}
+                    />
+
                     {detalheSelecionado.status === 'ABERTO' && (
                       <PrimaryButton
                         title="Cancelar / Excluir Chamado"
@@ -365,8 +591,10 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
                           setDetalheSelecionado(null);
                           requestCancelOcorrencia(target);
                         }}
+                        style={{ marginTop: spacing.sm }}
                       />
                     )}
+
                     <PrimaryButton
                       title="Fechar Detalhes"
                       variant="outline"
@@ -378,6 +606,232 @@ export const MyOcorrenciasScreen: React.FC<Props> = ({ navigation }) => {
               )}
             </View>
           </View>
+        </Modal>
+
+        <Modal
+          visible={!!editItem}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setEditItem(null)}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalOverlay}
+          >
+            <View style={styles.modalCard}>
+              {editItem && (
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  <View style={styles.modalHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.modalProtocol}>
+                        EDITAR CHAMADO #{editItem.protocoloOs}
+                      </Text>
+                      <Text style={styles.modalTitle}>
+                        {isGestor
+                          ? 'Despacho & Atualização de OS'
+                          : 'Editar Minha Ocorrência'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.closeBtn}
+                      disabled={savingEdit}
+                      onPress={() => setEditItem(null)}
+                    >
+                      <Ionicons
+                        name="close"
+                        size={20}
+                        color={colors.textPrimary}
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  {!!editError && (
+                    <View style={styles.errorBanner}>
+                      <Ionicons
+                        name="alert-circle-outline"
+                        size={18}
+                        color={colors.danger}
+                      />
+                      <Text style={styles.errorBannerText}>{editError}</Text>
+                    </View>
+                  )}
+
+                  <Text style={styles.editSectionLabel}>
+                    Categoria do Incidente
+                  </Text>
+                  <View style={styles.editChipsWrap}>
+                    {(
+                      Object.keys(CATEGORIAS_META) as CategoriaOcorrencia[]
+                    ).map((catKey) => {
+                      const isSelected = editCategoria === catKey;
+                      return (
+                        <TouchableOpacity
+                          key={catKey}
+                          style={[
+                            styles.editOptionChip,
+                            isSelected && styles.editOptionChipActive,
+                          ]}
+                          onPress={() => setEditCategoria(catKey)}
+                        >
+                          <Ionicons
+                            name={CATEGORIAS_META[catKey].icon as any}
+                            size={14}
+                            color={
+                              isSelected
+                                ? colors.primary
+                                : colors.textSecondary
+                            }
+                          />
+                          <Text
+                            style={[
+                              styles.editOptionChipText,
+                              isSelected && styles.editOptionChipTextActive,
+                            ]}
+                          >
+                            {CATEGORIAS_META[catKey].label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <Text style={styles.editSectionLabel}>
+                    Nível de Criticidade
+                  </Text>
+                  <View style={styles.editRowInline}>
+                    {(
+                      [
+                        'CRITICA',
+                        'ALTA',
+                        'MEDIA',
+                        'BAIXA',
+                      ] as CriticidadeNivel[]
+                    ).map((nivel) => {
+                      const isSelected = editCriticidade === nivel;
+                      const cor = colors.criticidade[nivel];
+                      return (
+                        <TouchableOpacity
+                          key={nivel}
+                          style={[
+                            styles.editSmallChip,
+                            isSelected && {
+                              borderColor: cor,
+                              backgroundColor: `${cor}22`,
+                            },
+                          ]}
+                          onPress={() => setEditCriticidade(nivel)}
+                        >
+                          <Text
+                            style={[
+                              styles.editSmallChipText,
+                              isSelected && { color: cor, fontWeight: '800' },
+                            ]}
+                          >
+                            {CRITICIDADE_META[nivel].label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {isGestor && (
+                    <>
+                      <Text style={styles.editSectionLabel}>
+                        Status da Ordem de Serviço (Exclusivo Gestor Público)
+                      </Text>
+                      <View style={styles.editRowInline}>
+                        {(
+                          [
+                            'ABERTO',
+                            'EM_ANALISE',
+                            'EM_EXECUCAO',
+                            'CONCLUIDO',
+                          ] as StatusOcorrencia[]
+                        ).map((st) => {
+                          const isSelected = editStatus === st;
+                          const cor = colors.status[st];
+                          return (
+                            <TouchableOpacity
+                              key={st}
+                              style={[
+                                styles.editSmallChip,
+                                isSelected && {
+                                  borderColor: cor,
+                                  backgroundColor: `${cor}22`,
+                                },
+                              ]}
+                              onPress={() => setEditStatus(st)}
+                            >
+                              <Text
+                                style={[
+                                  styles.editSmallChipText,
+                                  isSelected && {
+                                    color: cor,
+                                    fontWeight: '800',
+                                  },
+                                ]}
+                              >
+                                {STATUS_META[st].label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </>
+                  )}
+
+                  <CustomInput
+                    label="Título da Ocorrência"
+                    placeholder="Título resumido do problema"
+                    icon="document-text-outline"
+                    editable={!savingEdit}
+                    value={editTitulo}
+                    onChangeText={setEditTitulo}
+                  />
+
+                  <CustomInput
+                    label="Descrição Detalhada"
+                    placeholder="Descreva os detalhes atualizados..."
+                    icon="chatbox-ellipses-outline"
+                    multiline
+                    numberOfLines={3}
+                    editable={!savingEdit}
+                    value={editDescricao}
+                    onChangeText={setEditDescricao}
+                  />
+
+                  <CustomInput
+                    label="Endereço de Referência"
+                    placeholder="Rua, número e bairro"
+                    icon="location-outline"
+                    editable={!savingEdit}
+                    value={editEndereco}
+                    onChangeText={setEditEndereco}
+                  />
+
+                  <View style={styles.modalActions}>
+                    <PrimaryButton
+                      title="Salvar Alterações"
+                      icon="checkmark-circle-outline"
+                      loading={savingEdit}
+                      disabled={savingEdit}
+                      onPress={handleSaveEdit}
+                    />
+                    <PrimaryButton
+                      title="Cancelar Edição"
+                      variant="outline"
+                      disabled={savingEdit}
+                      onPress={() => setEditItem(null)}
+                      style={{ marginTop: spacing.sm }}
+                    />
+                  </View>
+                </ScrollView>
+              )}
+            </View>
+          </KeyboardAvoidingView>
         </Modal>
 
         <Modal
@@ -482,6 +936,35 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
   },
+  gestorSwitchRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    marginBottom: spacing.sm + 2,
+  },
+  gestorSwitchBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+  },
+  gestorSwitchBtnActive: {
+    backgroundColor: colors.accent,
+  },
+  gestorSwitchText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  gestorSwitchTextActive: {
+    color: colors.textInverse,
+  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -515,6 +998,23 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontSize: 13,
     fontWeight: '600',
+  },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  successBannerText: {
+    flex: 1,
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
   },
   listContent: {
     paddingBottom: spacing.xxxl,
@@ -557,7 +1057,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     padding: spacing.xl,
-    maxHeight: '88%',
+    maxHeight: '90%',
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
   },
@@ -657,6 +1157,65 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 13,
     lineHeight: 19,
+  },
+  editSectionLabel: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: spacing.xs + 2,
+  },
+  editChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+    marginBottom: spacing.md,
+  },
+  editOptionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 7,
+    borderRadius: radius.md,
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+  },
+  editOptionChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryMuted,
+  },
+  editOptionChipText: {
+    color: colors.textSecondary,
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  editOptionChipTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  editRowInline: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+    marginBottom: spacing.md,
+  },
+  editSmallChip: {
+    flex: 1,
+    minWidth: '22%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: radius.sm,
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+  },
+  editSmallChipText: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
   },
   modalActions: {
     marginTop: spacing.xs,

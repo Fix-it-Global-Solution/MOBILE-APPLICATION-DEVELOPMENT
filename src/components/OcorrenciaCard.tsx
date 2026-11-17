@@ -18,6 +18,7 @@ import { Ocorrencia } from '../types';
 interface OcorrenciaCardProps {
   ocorrencia: Ocorrencia;
   onPress?: () => void;
+  onEdit?: () => void;
   onDelete?: () => void;
   showActions?: boolean;
 }
@@ -25,6 +26,7 @@ interface OcorrenciaCardProps {
 export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
   ocorrencia,
   onPress,
+  onEdit,
   onDelete,
   showActions = false,
 }) => {
@@ -141,6 +143,17 @@ export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
           <Text style={styles.dateText}>{formattedDate}</Text>
         </View>
 
+        <View style={styles.authorRow}>
+          <Ionicons
+            name="person-circle-outline"
+            size={14}
+            color={colors.textMuted}
+          />
+          <Text style={styles.authorText} numberOfLines={1}>
+            Solicitante: {ocorrencia.autorNome}
+          </Text>
+        </View>
+
         {ocorrencia.parecerIa && (
           <View style={styles.aiBox}>
             <Ionicons
@@ -164,11 +177,26 @@ export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
             >
               <Ionicons
                 name="eye-outline"
-                size={16}
+                size={15}
                 color={colors.accent}
               />
-              <Text style={styles.detailButtonText}>Ver Parecer & OS</Text>
+              <Text style={styles.detailButtonText}>Detalhes</Text>
             </TouchableOpacity>
+
+            {onEdit && (
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={onEdit}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="create-outline"
+                  size={15}
+                  color={colors.primary}
+                />
+                <Text style={styles.editButtonText}>Editar</Text>
+              </TouchableOpacity>
+            )}
 
             {onDelete && ocorrencia.status === 'ABERTO' ? (
               <TouchableOpacity
@@ -178,10 +206,10 @@ export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
               >
                 <Ionicons
                   name="trash-outline"
-                  size={16}
+                  size={15}
                   color={colors.danger}
                 />
-                <Text style={styles.deleteButtonText}>Cancelar Chamado</Text>
+                <Text style={styles.deleteButtonText}>Cancelar</Text>
               </TouchableOpacity>
             ) : (
               onDelete && (
@@ -191,7 +219,7 @@ export const OcorrenciaCard: React.FC<OcorrenciaCardProps> = ({
                     size={13}
                     color={colors.textMuted}
                   />
-                  <Text style={styles.lockedDeleteText}>Em Triagem/OS</Text>
+                  <Text style={styles.lockedDeleteText}>Em OS</Text>
                 </View>
               )
             )}
@@ -315,6 +343,17 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
   },
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+  },
+  authorText: {
+    color: colors.textMuted,
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
   aiBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -340,21 +379,38 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm + 2,
     borderTopWidth: 1,
     borderTopColor: colors.surfaceBorder,
-    gap: spacing.sm,
+    gap: spacing.xs + 2,
   },
   detailButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4,
     paddingVertical: spacing.sm,
     borderRadius: radius.sm,
     backgroundColor: colors.accentMuted,
   },
   detailButtonText: {
     color: colors.accent,
-    fontSize: 12,
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  editButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primaryMuted,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  editButtonText: {
+    color: colors.primary,
+    fontSize: 11.5,
     fontWeight: '700',
   },
   deleteButton: {
@@ -362,14 +418,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4,
     paddingVertical: spacing.sm,
     borderRadius: radius.sm,
     backgroundColor: colors.dangerMuted,
   },
   deleteButtonText: {
     color: colors.danger,
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
   },
   lockedDeleteBadge: {
@@ -377,7 +433,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 4,
     paddingVertical: spacing.sm,
     borderRadius: radius.sm,
     backgroundColor: colors.backgroundSecondary,
@@ -386,7 +442,7 @@ const styles = StyleSheet.create({
   },
   lockedDeleteText: {
     color: colors.textMuted,
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '600',
   },
 });

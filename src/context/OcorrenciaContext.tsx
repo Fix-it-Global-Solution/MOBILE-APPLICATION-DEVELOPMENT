@@ -7,7 +7,11 @@ import React, {
   useState,
 } from 'react';
 import { ocorrenciaService } from '../services/ocorrenciaService';
-import { Ocorrencia, OcorrenciaRequestDTO } from '../types';
+import {
+  Ocorrencia,
+  OcorrenciaRequestDTO,
+  OcorrenciaUpdateDTO,
+} from '../types';
 import { useAuth } from './AuthContext';
 
 interface OcorrenciaContextData {
@@ -20,6 +24,10 @@ interface OcorrenciaContextData {
   listarMinhasOcorrencias: (usuarioId?: number) => Promise<Ocorrencia[]>;
   criarOcorrencia: (
     dados: Omit<OcorrenciaRequestDTO, 'usuarioId'>
+  ) => Promise<Ocorrencia>;
+  atualizarOcorrencia: (
+    id: number,
+    dados: OcorrenciaUpdateDTO
   ) => Promise<Ocorrencia>;
   cancelarOcorrencia: (id: number) => Promise<void>;
   excluirOcorrencia: (id: number) => Promise<void>;
@@ -94,6 +102,20 @@ export const OcorrenciaProvider: React.FC<{ children: React.ReactNode }> = ({
     [user]
   );
 
+  const atualizarOcorrencia = useCallback(
+    async (id: number, dados: OcorrenciaUpdateDTO) => {
+      const atualizada = await ocorrenciaService.atualizarOcorrencia(
+        id,
+        dados
+      );
+      setOcorrencias((prev) =>
+        prev.map((item) => (item.id === id ? atualizada : item))
+      );
+      return atualizada;
+    },
+    []
+  );
+
   const cancelarOcorrencia = useCallback(async (id: number) => {
     await ocorrenciaService.cancelarOcorrencia(id);
     setOcorrencias((prev) => prev.filter((item) => item.id !== id));
@@ -111,8 +133,7 @@ export const OcorrenciaProvider: React.FC<{ children: React.ReactNode }> = ({
     return ocorrencias.filter(
       (item) =>
         item.usuarioId === user.id ||
-        item.autorNome.toLowerCase() === user.nome.toLowerCase() ||
-        item.usuarioId === 1
+        item.autorNome.toLowerCase() === user.nome.toLowerCase()
     );
   }, [ocorrencias, user]);
 
@@ -127,6 +148,7 @@ export const OcorrenciaProvider: React.FC<{ children: React.ReactNode }> = ({
         listarOcorrencias,
         listarMinhasOcorrencias,
         criarOcorrencia,
+        atualizarOcorrencia,
         cancelarOcorrencia,
         excluirOcorrencia,
       }}

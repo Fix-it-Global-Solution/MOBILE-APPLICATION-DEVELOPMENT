@@ -36,7 +36,10 @@ export const AuthStackNavigator: React.FC = () => {
 };
 
 export const MainTabNavigator: React.FC = () => {
-  const { minhasOcorrencias } = useOcorrencias();
+  const { user } = useAuth();
+  const { ocorrencias, minhasOcorrencias } = useOcorrencias();
+  const isGestor = user?.perfil === 'ROLE_GESTOR';
+  const badgeCount = isGestor ? ocorrencias.length : minhasOcorrencias.length;
 
   return (
     <AppTab.Navigator
@@ -90,11 +93,10 @@ export const MainTabNavigator: React.FC = () => {
         name="MyOcorrencias"
         component={MyOcorrenciasScreen}
         options={{
-          title: 'Meus Chamados',
-          tabBarBadge:
-            minhasOcorrencias.length > 0 ? minhasOcorrencias.length : undefined,
+          title: isGestor ? 'Gestão de OS' : 'Meus Chamados',
+          tabBarBadge: badgeCount > 0 ? badgeCount : undefined,
           tabBarBadgeStyle: {
-            backgroundColor: colors.primary,
+            backgroundColor: isGestor ? colors.accent : colors.primary,
             color: colors.textInverse,
             fontSize: 10,
             fontWeight: '800',

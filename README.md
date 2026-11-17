@@ -42,6 +42,7 @@ Cada chamado registrado passa automaticamente por uma camada de **triagem inteli
 - **Operações CRUD Completas (`ocorrenciaService.ts`):**
   - **Create:** Abertura de novas ocorrências georreferenciadas com validação de payload e tratamento de erros `400 Bad Request`.
   - **Read:** Listagem geral de incidentes urbanos para o painel/mapa e filtragem individual dos chamados pertencentes ao cidadão logado.
+  - **Update (Edição):** Atualização completa dos dados da ocorrência (`PUT /api/v1/ocorrencias/{id}`), permitindo alterar título, descrição, categoria, nível de criticidade, endereço e status da ordem de serviço com sincronização imediata no painel e mapa.
   - **Delete (Cancelamento):** Exclusão/cancelamento de chamados abertos mediante confirmação explícita do usuário e validação de regra de negócio (permitido exclusivamente para ocorrências com status `ABERTO`).
 
 ### 3.3. Integração com Hardware Nativo (GPS, Câmera e Mapas)
@@ -145,6 +146,7 @@ A camada de serviços (`src/services/api.ts`, `authService.ts` e `ocorrenciaServ
 | `POST` | `/api/v1/auth/registrar` | Registra um novo munícipe (`ROLE_CIDADAO` ou `ROLE_GESTOR`) | Pública |
 | `GET` | `/api/v1/ocorrencias` | Lista as ocorrências urbanas georreferenciadas (suporta paginação) | Bearer JWT |
 | `POST` | `/api/v1/ocorrencias` | Registra uma nova ocorrência com coordenadas GPS e foto | Bearer JWT |
+| `PUT` | `/api/v1/ocorrencias/{id}` | Atualiza os dados, criticidade, categoria ou status de uma ocorrência | Bearer JWT |
 | `DELETE` | `/api/v1/ocorrencias/{id}` | Cancela uma ocorrência existente (restrito ao status `ABERTO`) | Bearer JWT |
 
 ---
