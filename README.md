@@ -25,7 +25,7 @@ Cada chamado registrado passa automaticamente por uma camada de **triagem inteli
 
 - **Versão da Aplicação:** `1.0.0`
 - **Commit Hash de Referência Oficial:** `9c13b49`
-
+- **Vídeo de Demonstração (Global Solution):** [Assistir no YouTube](https://youtu.be/s3QerhZYuc4)
 ---
 
 ## 3. O Que Foi Desenvolvido
